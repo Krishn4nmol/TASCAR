@@ -92,6 +92,7 @@ DROPOUT_RATE       = 0.1
 
 # ─────────────────────────────────────────
 # TASCAR: SAC SETTINGS
+# Tuned for serverless scheduling!
 # ─────────────────────────────────────────
 SAC_ALPHA       = 0.2
 SAC_TAU         = 0.005
@@ -99,17 +100,18 @@ SAC_GAMMA       = 0.63
 SAC_LR_ACTOR    = 0.0003
 SAC_LR_CRITIC   = 0.0003
 SAC_LR_ALPHA    = 0.0003
-SAC_BUFFER_SIZE = 10000
-SAC_BATCH_SIZE  = 256
+SAC_BUFFER_SIZE = 50000
+SAC_BATCH_SIZE  = 64
 SAC_UPDATE_FREQ = 1
 AUTO_ENTROPY    = True
 TARGET_ENTROPY  = -1.0
+SAC_UPDATES_PER_STEP = 5
 
 # ─────────────────────────────────────────
 # TASCAR: DYNAMIC REWARD SETTINGS
 # ─────────────────────────────────────────
-THETA_MIN       = 0.5
-THETA_MAX       = 0.9
+THETA_MIN        = 0.5
+THETA_MAX        = 0.9
 THETA_ADAPT_RATE = 0.01
 
 # ─────────────────────────────────────────
