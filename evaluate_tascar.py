@@ -1,7 +1,8 @@
 # evaluate_tascar.py
 # Compares CASR vs TASCAR
-# Runs both on same 3 workloads
-# Generates comparison graphs
+# Uses TASCAR_DELTA for TASCAR
+# Uses DELTA for CASR
+# Fair comparison!
 
 import numpy as np
 import json
@@ -17,6 +18,7 @@ from config import (
     NUM_FUNCTIONS,
     EVAL_CALLS,
     DELTA,
+    TASCAR_DELTA,
     SEQUENCE_LENGTH,
     TRANSFORMER_DIM,
     TASCAR_MODEL_PATH,
@@ -38,16 +40,15 @@ from ppo_agent import PPOAgent
 
 
 # ─────────────────────────────────────────
-# CASR ALGORITHM FOR EVALUATION
-# Loads trained PPO model
-# Needed for comparison with TASCAR!
+# CASR ALGORITHM
+# Uses original DELTA = 10000
+# Loaded from CASR trained model
 # ─────────────────────────────────────────
 
 class CASRAlgorithm:
     """
     CASR with trained PPO model.
-    Used for comparison with TASCAR.
-    Loads from CASR trained_model folder.
+    Uses DELTA = 10000 (original!)
     """
     def __init__(self,
                  model_path=None):
@@ -64,10 +65,10 @@ class CASRAlgorithm:
                     "actor.pth")):
             self.agent.load(model_path)
             print(
-                f"  CASR model loaded!")
+                "  CASR model loaded!")
         else:
             print(
-                "  No CASR model found!")
+                "  No CASR model!")
             print(
                 "  Using S-Cache only!")
 
@@ -94,6 +95,7 @@ class CASRAlgorithm:
     def handle_request(self,
                        function_call):
         self.call_count += 1
+        # CASR uses original DELTA!
         if self.call_count % DELTA == 0:
             state = np.array(
                 self.scache.get_state(),
@@ -102,8 +104,7 @@ class CASRAlgorithm:
             std  = np.std(state)
             if std > 0:
                 state = (
-                    (state - mean) /
-                    std)
+                    (state - mean) / std)
             action, _ = (
                 self.agent
                 .choose_action(state))
@@ -128,16 +129,23 @@ class CASRAlgorithm:
 
 
 # ─────────────────────────────────────────
-# TASCAR ALGORITHM FOR EVALUATION
-# Loads trained SAC + Transformer
-# No learning during evaluation!
+# TASCAR ALGORITHM
+# Uses TASCAR_DELTA = 1000
+# More frequent decisions!
 # ─────────────────────────────────────────
 
 class TASCARAlgorithm:
     """
     TASCAR with trained SAC +
-    Transformer model.
-    Uses learned policy only!
+    Transformer.
+
+    Uses TASCAR_DELTA = 1000
+    Makes 100 decisions per workload
+    vs CASR 10 decisions per workload!
+
+    More frequent decisions +
+    Temporal state encoding =
+    Better performance!
     """
     def __init__(self,
                  model_path=None):
@@ -147,12 +155,10 @@ class TASCARAlgorithm:
         self.action_dim = (
             3 ** NUM_QUEUES)
 
-        # Create Transformer
         self.transformer = (
             TransformerEncoder(
                 self.state_dim))
 
-        # Create SAC agent
         self.agent = SACAgent(
             transformer_dim=(
                 TRANSFORMER_DIM),
@@ -161,22 +167,19 @@ class TASCARAlgorithm:
             transformer=(
                 self.transformer))
 
-        # Load trained weights
         if (model_path and
                 os.path.exists(
                     model_path +
                     "actor.pth")):
-            self.agent.load(
-                model_path)
+            self.agent.load(model_path)
             print(
                 "  TASCAR model loaded!")
         else:
             print(
                 "  No TASCAR model!")
             print(
-                "  Please train first!")
+                "  Run train_tascar.py!")
 
-        # History buffer
         self.history = (
             StateHistoryBuffer(
                 SEQUENCE_LENGTH,
@@ -189,9 +192,10 @@ class TASCARAlgorithm:
                        function_call):
         self.call_count += 1
 
-        if self.call_count % DELTA == 0:
+        # TASCAR uses smaller delta!
+        if (self.call_count %
+                TASCAR_DELTA == 0):
 
-            # Get state
             raw_state = np.array(
                 self.scache.get_state(),
                 dtype=np.float32)
@@ -208,10 +212,8 @@ class TASCARAlgorithm:
                 .get_sequence())
             encoded = (
                 self.agent
-                .get_encoded_state(
-                    seq))
+                .get_encoded_state(seq))
 
-            # Best action only!
             action = (
                 self.agent
                 .choose_action(
@@ -219,8 +221,7 @@ class TASCARAlgorithm:
                     evaluate=True))
 
             scales = (
-                self.action_map[
-                    action])
+                self.action_map[action])
             for q_idx, scale in (
                     enumerate(scales)):
                 if scale != 0:
@@ -242,22 +243,16 @@ class TASCARAlgorithm:
 
 # ─────────────────────────────────────────
 # LOAD WORKLOADS
-# Same 3 workloads as CASR!
-# Same seeds for fair comparison!
+# Same as CASR for fair comparison!
 # ─────────────────────────────────────────
 
 def load_workloads():
-    """
-    Loads all 3 workloads.
-    Same as CASR evaluate.py
-    for fair comparison!
-    """
     loader    = AzureDataLoader()
     workloads = {}
 
     print("\nPreparing workloads...")
 
-    # Common workload
+    # Common
     print("  Loading Common...")
     day1   = loader.load_day(1)
     counts = Counter(
@@ -281,15 +276,14 @@ def load_workloads():
     workloads['Common'] = common
     print(f"    {len(common)} calls")
 
-    # Significant workload
+    # Significant
     print("  Loading Significant...")
     day2  = loader.load_day(2)
     heavy = [
         c for c in day2
         if c.cold_start_overhead > 1]
     counts = Counter(
-        c.function_id
-        for c in heavy)
+        c.function_id for c in heavy)
     top = set(
         f for f, _ in
         counts.most_common(
@@ -312,16 +306,14 @@ def load_workloads():
     print(
         f"    {len(significant)} calls")
 
-    # Random workload
+    # Random
     print("  Loading Random...")
     day3  = loader.load_day(3)
     funcs = list(set(
-        c.function_id
-        for c in day3))
+        c.function_id for c in day3))
     np.random.seed(123)
     np.random.shuffle(funcs)
-    selected = set(
-        funcs[:NUM_FUNCTIONS])
+    selected  = set(funcs[:NUM_FUNCTIONS])
     random_wl = [
         c for c in day3
         if c.function_id in selected]
@@ -333,8 +325,7 @@ def load_workloads():
             replace=False)
         idx.sort()
         random_wl = [
-            random_wl[i]
-            for i in idx]
+            random_wl[i] for i in idx]
     workloads['Random'] = random_wl
     print(f"    {len(random_wl)} calls")
 
@@ -346,10 +337,6 @@ def load_workloads():
 # ─────────────────────────────────────────
 
 def run_evaluation():
-    """
-    Compares CASR vs TASCAR
-    on all 3 workloads.
-    """
     os.makedirs(
         TASCAR_RESULTS,
         exist_ok=True)
@@ -368,16 +355,12 @@ def run_evaluation():
             f"\nWorkload: {wl_name}")
         print("-" * 40)
 
-        # Cool between workloads
         if wl_idx > 0:
-            secs = (
-                COOLING_BETWEEN_WORKLOADS)
+            secs = COOLING_BETWEEN_WORKLOADS
             print(
-                f"\nCooling CPU {secs}s"
-                f" before next "
-                f"workload...")
-            for i in range(
-                    secs // 10):
+                f"\nCooling CPU "
+                f"{secs}s...")
+            for i in range(secs // 10):
                 remaining = (
                     secs - (i * 10))
                 print(
@@ -388,10 +371,10 @@ def run_evaluation():
 
         results[wl_name] = {}
 
-        # ── Run CASR ──
+        # Run CASR
         print("\n  Running CASR...")
         try:
-            casr = CASRAlgorithm(
+            casr   = CASRAlgorithm(
                 MODEL_SAVE_PATH +
                 "best/")
             sim    = Simulator(casr)
@@ -402,11 +385,13 @@ def run_evaluation():
                 'CASR'] = casr_m
             print(
                 f"  ✅ CASR "
-                f"Cold%: {casr_m['cold_start_rate']:.3f}% "
-                f"WMT: {casr_m['avg_wasted_memory_time']:.3f}s")
+                f"Cold%: "
+                f"{casr_m['cold_start_rate']:.3f}% "
+                f"WMT: "
+                f"{casr_m['avg_wasted_memory_time']:.3f}s")
         except Exception as e:
             print(
-                f"  ❌ CASR Error: {e}")
+                f"  ❌ CASR: {e}")
             results[wl_name][
                 'CASR'] = {
                 'cold_start_rate':         0,
@@ -415,14 +400,13 @@ def run_evaluation():
 
         # Cool between algorithms
         secs = COOLING_BETWEEN_ALGORITHMS
-        print(
-            f"\n  Cooling {secs}s...")
+        print(f"\n  Cooling {secs}s...")
         time.sleep(secs)
 
-        # ── Run TASCAR ──
+        # Run TASCAR
         print("\n  Running TASCAR...")
         try:
-            tascar = TASCARAlgorithm(
+            tascar   = TASCARAlgorithm(
                 TASCAR_MODEL_PATH +
                 "best/")
             sim      = Simulator(tascar)
@@ -433,25 +417,21 @@ def run_evaluation():
                 'TASCAR'] = tascar_m
             print(
                 f"  ✅ TASCAR "
-                f"Cold%: {tascar_m['cold_start_rate']:.3f}% "
-                f"WMT: {tascar_m['avg_wasted_memory_time']:.3f}s")
+                f"Cold%: "
+                f"{tascar_m['cold_start_rate']:.3f}% "
+                f"WMT: "
+                f"{tascar_m['avg_wasted_memory_time']:.3f}s")
         except Exception as e:
             print(
-                f"  ❌ TASCAR "
-                f"Error: {e}")
+                f"  ❌ TASCAR: {e}")
             results[wl_name][
                 'TASCAR'] = {
                 'cold_start_rate':         0,
                 'avg_wasted_memory_time':  0,
                 'avg_cold_start_overhead': 0}
 
-    # Save results
     _save_results(results)
-
-    # Print summary
     print_summary(results)
-
-    # Generate graphs
     plot_comparison(results)
 
     return results
@@ -462,7 +442,6 @@ def run_evaluation():
 # ─────────────────────────────────────────
 
 def _save_results(results):
-    """Save results to JSON"""
     path = (
         TASCAR_RESULTS +
         'casr_vs_tascar.json')
@@ -483,14 +462,13 @@ def _save_results(results):
 
 
 # ─────────────────────────────────────────
-# PRINT SUMMARY TABLE
+# PRINT SUMMARY
 # ─────────────────────────────────────────
 
 def print_summary(results):
-    """Print comparison table"""
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 65)
     print("CASR vs TASCAR Final Results")
-    print("=" * 60)
+    print("=" * 65)
 
     workloads = [
         'Common',
@@ -513,18 +491,15 @@ def print_summary(results):
         casr_cold = (
             results[wl]
             .get('CASR', {})
-            .get('cold_start_rate',
-                 0))
+            .get('cold_start_rate', 0))
         tascar_cold = (
             results[wl]
             .get('TASCAR', {})
-            .get('cold_start_rate',
-                 0))
+            .get('cold_start_rate', 0))
 
         for algo in [
                 'CASR', 'TASCAR']:
-            if algo not in (
-                    results[wl]):
+            if algo not in results[wl]:
                 continue
             m = results[wl][algo]
 
@@ -553,18 +528,15 @@ def print_summary(results):
                 f"{result:>14}")
 
     print("\npp = percentage points")
-    print(
-        "✅ = TASCAR better than CASR")
-    print(
-        "❌ = TASCAR worse than CASR")
+    print("✅ = TASCAR better than CASR")
+    print("❌ = TASCAR worse than CASR")
 
 
 # ─────────────────────────────────────────
-# GENERATE COMPARISON GRAPHS
+# PLOT COMPARISON
 # ─────────────────────────────────────────
 
 def plot_comparison(results):
-    """CASR vs TASCAR graphs"""
     workloads  = [
         'Common',
         'Significant',
@@ -600,20 +572,17 @@ def plot_comparison(results):
             metrics_info):
 
         ax    = axes[ax_idx]
-        x     = np.arange(
-            len(workloads))
+        x     = np.arange(len(workloads))
         width = 0.35
 
         for i, algo in enumerate(
                 algorithms):
-            values = []
-            for wl in workloads:
-                val = (
-                    results
-                    .get(wl, {})
-                    .get(algo, {})
-                    .get(metric, 0))
-                values.append(val)
+            values = [
+                results
+                .get(wl, {})
+                .get(algo, {})
+                .get(metric, 0)
+                for wl in workloads]
 
             offset = (i - 0.5) * width
             bars   = ax.bar(
@@ -630,8 +599,7 @@ def plot_comparison(results):
                     bars, values):
                 ax.text(
                     bar.get_x() +
-                    bar.get_width() /
-                    2,
+                    bar.get_width() / 2,
                     bar.get_height() +
                     0.1,
                     f'{val:.2f}',
@@ -658,8 +626,7 @@ def plot_comparison(results):
         dpi=150,
         bbox_inches='tight')
     plt.close()
-    print(
-        f"Graph saved: {save_path}")
+    print(f"Graph saved: {save_path}")
 
 
 # ─────────────────────────────────────────
@@ -675,14 +642,10 @@ if __name__ == "__main__":
     tascar_path = (
         TASCAR_MODEL_PATH + "best/")
     if not os.path.exists(
-            tascar_path +
-            "actor.pth"):
+            tascar_path + "actor.pth"):
         print(
             "\n❌ TASCAR model not found!")
         print(
-            "Run train_tascar.py first!")
-        print(
-            "Command: "
-            "python train_tascar.py")
+            "Run: python train_tascar.py")
     else:
         run_evaluation()

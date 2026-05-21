@@ -94,18 +94,27 @@ DROPOUT_RATE       = 0.1
 # TASCAR: SAC SETTINGS
 # Tuned for serverless scheduling!
 # ─────────────────────────────────────────
-SAC_ALPHA       = 0.2
-SAC_TAU         = 0.005
-SAC_GAMMA       = 0.63
-SAC_LR_ACTOR    = 0.0003
-SAC_LR_CRITIC   = 0.0003
-SAC_LR_ALPHA    = 0.0003
-SAC_BUFFER_SIZE = 50000
-SAC_BATCH_SIZE  = 64
-SAC_UPDATE_FREQ = 1
-AUTO_ENTROPY    = True
-TARGET_ENTROPY  = -1.0
-SAC_UPDATES_PER_STEP = 5
+SAC_ALPHA            = 0.2
+SAC_TAU              = 0.005
+SAC_GAMMA            = 0.63
+SAC_LR_ACTOR         = 0.0003
+SAC_LR_CRITIC        = 0.0003
+SAC_LR_ALPHA         = 0.0003
+SAC_BUFFER_SIZE      = 100000
+SAC_BATCH_SIZE       = 64
+SAC_UPDATE_FREQ      = 1
+AUTO_ENTROPY         = True
+TARGET_ENTROPY       = -1.0
+SAC_UPDATES_PER_STEP = 10
+
+# ─────────────────────────────────────────
+# TASCAR: DELTA
+# Smaller than CASR DELTA!
+# More decisions = more learning!
+# CASR:   10000 (10 steps/episode)
+# TASCAR:  1000 (100 steps/episode)
+# ─────────────────────────────────────────
+TASCAR_DELTA = 1000
 
 # ─────────────────────────────────────────
 # TASCAR: DYNAMIC REWARD SETTINGS

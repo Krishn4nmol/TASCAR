@@ -1,7 +1,7 @@
 # train_tascar.py
 # Training script for TASCAR
 # Uses SAC + Transformer encoder
-# Fixed for proper learning!
+# Fixed with proper delta and warmup!
 
 import numpy as np
 import json
@@ -17,6 +17,7 @@ from config import (
     NUM_FUNCTIONS,
     EVAL_CALLS,
     DELTA,
+    TASCAR_DELTA,
     THETA,
     THETA_MIN,
     THETA_MAX,
@@ -42,6 +43,11 @@ from sac_agent import SACAgent
 # ─────────────────────────────────────────
 
 def load_filtered_data():
+    """
+    Loads Azure dataset filtered
+    to top NUM_FUNCTIONS functions.
+    Same as CASR train.py!
+    """
     loader     = AzureDataLoader()
     train_data = []
 
@@ -68,16 +74,52 @@ def load_filtered_data():
 
     print(f"  Total after filter: "
           f"{len(train_data)}")
+    print(f"  Unique functions: "
+          f"{NUM_FUNCTIONS}")
+
     return train_data
 
 
 # ─────────────────────────────────────────
+# NORMALIZE STATE
+# ─────────────────────────────────────────
+
+def normalize_state(raw_state):
+    """
+    Normalize state to zero mean
+    unit variance.
+    Same as CASR environment.py!
+    """
+    state = np.array(
+        raw_state,
+        dtype=np.float32)
+    mean = np.mean(state)
+    std  = np.std(state)
+    if std > 0:
+        state = (state - mean) / std
+    return state
+
+
+# ─────────────────────────────────────────
 # DYNAMIC THETA
+# Key innovation of TASCAR!
 # ─────────────────────────────────────────
 
 def compute_dynamic_theta(
         cold_start_rate,
         current_theta):
+    """
+    Adapts theta based on performance.
+
+    Cold starts too high (>90%):
+    Increase theta → focus on cold starts!
+
+    Cold starts acceptable (<70%):
+    Decrease theta → focus on memory!
+
+    CASR uses fixed theta=0.8 always.
+    TASCAR adapts automatically!
+    """
     if cold_start_rate > 0.9:
         new_theta = min(
             current_theta +
@@ -94,30 +136,23 @@ def compute_dynamic_theta(
 
 
 # ─────────────────────────────────────────
-# NORMALIZE STATE
-# ─────────────────────────────────────────
-
-def normalize_state(raw_state):
-    """Normalize state to zero mean unit variance"""
-    state = np.array(
-        raw_state, dtype=np.float32)
-    mean = np.mean(state)
-    std  = np.std(state)
-    if std > 0:
-        state = (state - mean) / std
-    return state
-
-
-# ─────────────────────────────────────────
-# CALCULATE REWARD
-# Normalized same as CASR!
+# REWARD NORMALIZER
+# Same normalization as CASR!
+# Fixes reward scale mismatch!
 # ─────────────────────────────────────────
 
 class RewardNormalizer:
     """
-    Normalizes reward same way as CASR
-    environment.py does!
-    Key fix for reward scale mismatch!
+    Normalizes reward exactly like
+    CASR environment.py does!
+
+    Without this TASCAR reward was -8.3
+    CASR reward was -0.04
+    Not comparable!
+
+    With this both rewards are
+    in same range -1.0 to 0.0
+    Fair comparison!
     """
     def __init__(self):
         self.r1_min =  float('inf')
@@ -132,7 +167,6 @@ class RewardNormalizer:
         r1 = float(cold_starts)
         r2 = float(max(0, wmt_change))
 
-        # Update bounds
         if r1 < self.r1_min:
             self.r1_min = r1
         if r1 > self.r1_max:
@@ -142,7 +176,6 @@ class RewardNormalizer:
         if r2 > self.r2_max:
             self.r2_max = r2
 
-        # Normalize R1
         r1_range = self.r1_max - self.r1_min
         r1_norm  = (
             (r1 - self.r1_min) /
@@ -150,7 +183,6 @@ class RewardNormalizer:
             if r1_range > 0
             else 0.0)
 
-        # Normalize R2
         r2_range = self.r2_max - self.r2_min
         r2_norm  = (
             (r2 - self.r2_min) /
@@ -158,7 +190,6 @@ class RewardNormalizer:
             if r2_range > 0
             else 0.0)
 
-        # Same formula as CASR!
         reward = -(
             theta * r1_norm +
             (1 - theta) * r2_norm)
@@ -171,6 +202,11 @@ class RewardNormalizer:
 # ─────────────────────────────────────────
 
 class TASCARLogger:
+    """
+    Records training metrics.
+    Same key names as CASR for
+    consistency!
+    """
     def __init__(self):
         self.episodes         = []
         self.rewards          = []
@@ -236,7 +272,6 @@ class TASCARLogger:
             fontsize=14,
             fontweight='bold')
 
-        # Reward
         axes[0, 0].plot(
             self.episodes,
             self.rewards,
@@ -257,7 +292,6 @@ class TASCARLogger:
         axes[0, 0].legend()
         axes[0, 0].grid(alpha=0.3)
 
-        # Cold start rate
         axes[0, 1].plot(
             self.episodes,
             self.cold_start_rates,
@@ -279,7 +313,6 @@ class TASCARLogger:
         axes[0, 1].legend()
         axes[0, 1].grid(alpha=0.3)
 
-        # WMT
         axes[1, 0].plot(
             self.episodes,
             self.wmts,
@@ -300,7 +333,6 @@ class TASCARLogger:
         axes[1, 0].legend()
         axes[1, 0].grid(alpha=0.3)
 
-        # Dynamic theta
         axes[1, 1].plot(
             self.episodes,
             self.thetas,
@@ -340,54 +372,71 @@ class TASCARLogger:
 
 
 # ─────────────────────────────────────────
-# WARM UP BUFFER
-# Fill buffer with random experiences
-# Before actual training starts!
-# This is critical for SAC!
+# WARMUP BUFFER
+# Fill buffer before training!
+# Critical for SAC learning!
 # ─────────────────────────────────────────
 
 def warmup_buffer(agent,
                   train_data,
                   state_dim,
-                  warmup_episodes=10):
+                  warmup_episodes=20):
     """
     Fills replay buffer with random
-    experiences before training!
+    experiences before training starts!
 
-    SAC needs diverse experiences
-    before it can learn effectively.
-    This is called exploration phase!
+    Why needed:
+    SAC is OFF-POLICY
+    Needs diverse experiences first
+    Before policy gradient updates work!
 
-    CASR (PPO) does not need this
-    because PPO is on-policy.
-    SAC is off-policy so needs
-    pre-filled buffer!
+    CASR PPO is ON-POLICY
+    Does not need this warmup!
+
+    With TASCAR_DELTA=1000:
+    Each episode = 100 steps
+    20 warmup episodes = 2000 experiences
+    Enough to start learning!
     """
-    print(f"\nWarming up buffer "
-          f"({warmup_episodes} episodes)...")
+    steps_per_ep = (
+        EVAL_CALLS // TASCAR_DELTA)
 
-    calls_per_ep = EVAL_CALLS
+    print(
+        f"\nWarming up buffer...")
+    print(
+        f"  Episodes:        "
+        f"{warmup_episodes}")
+    print(
+        f"  Steps/episode:   "
+        f"{steps_per_ep}")
+    print(
+        f"  Expected buffer: "
+        f"{warmup_episodes * steps_per_ep}")
 
     for ep in range(warmup_episodes):
         max_start = max(
             1,
-            len(train_data) - calls_per_ep)
+            len(train_data) - EVAL_CALLS)
         start_idx = np.random.randint(
             0, max_start)
         episode_calls = train_data[
             start_idx:
-            start_idx + calls_per_ep]
+            start_idx + EVAL_CALLS]
+
+        if len(episode_calls) < 1000:
+            episode_calls = (
+                train_data[:EVAL_CALLS])
 
         scache  = SCache()
         history = StateHistoryBuffer(
             SEQUENCE_LENGTH, state_dim)
 
-        raw_state = normalize_state(
+        raw     = normalize_state(
             scache.get_state())
-        history.add(raw_state)
-        seq = history.get_sequence()
-        encoded = agent.get_encoded_state(
-            seq)
+        history.add(raw)
+        seq     = history.get_sequence()
+        encoded = (
+            agent.get_encoded_state(seq))
 
         step_cold  = 0
         step_warm  = 0
@@ -396,63 +445,82 @@ def warmup_buffer(agent,
 
         for call in episode_calls:
             is_warm = (
-                scache.handle_request(call))
+                scache.handle_request(
+                    call))
             if is_warm:
                 step_warm += 1
             else:
                 step_cold += 1
             call_count += 1
 
-            if call_count % DELTA == 0:
+            if (call_count %
+                    TASCAR_DELTA == 0):
+
                 new_raw = normalize_state(
                     scache.get_state())
                 history.add(new_raw)
                 new_seq = (
                     history.get_sequence())
-                next_encoded = (
+                next_enc = (
                     agent.get_encoded_state(
                         new_seq))
 
-                # Random action for warmup!
+                # Random action!
                 action = np.random.randint(
                     0, agent.action_dim)
 
-                total = step_cold + step_warm
+                total = (
+                    step_cold + step_warm)
                 cold_rate = (
                     step_cold / total
                     if total > 0 else 0)
+
                 current_wmt = (
                     scache
                     .get_total_wasted_memory_time())
                 wmt_change = max(
                     0,
-                    current_wmt - wmt_before)
+                    current_wmt -
+                    wmt_before)
                 wmt_before = current_wmt
 
                 reward = -(
-                    THETA * min(
-                        cold_rate, 1.0) +
-                    (1 - THETA) * min(
-                        wmt_change / 100.0,
-                        1.0))
+                    THETA *
+                    min(cold_rate, 1.0) +
+                    (1 - THETA) *
+                    min(
+                        wmt_change /
+                        100.0, 1.0))
 
                 agent.store_experience(
                     encoded,
                     action,
                     reward,
-                    next_encoded,
+                    next_enc,
                     False)
 
-                encoded   = next_encoded
+                # Apply random action
+                scales = (
+                    agent.action_map[
+                        action])
+                for q_idx, scale in (
+                        enumerate(scales)):
+                    if scale != 0:
+                        scache.scale_queue(
+                            q_idx, scale)
+
+                encoded   = next_enc
                 step_cold = 0
                 step_warm = 0
 
-        print(f"  Warmup ep {ep+1}: "
-              f"Buffer size: "
-              f"{len(agent.buffer)}")
+        print(
+            f"  Warmup ep {ep+1:2d}: "
+            f"Buffer: "
+            f"{len(agent.buffer)}")
 
-    print(f"Buffer warmed up! "
-          f"Size: {len(agent.buffer)}")
+    print(
+        f"Warmup complete! "
+        f"Buffer: {len(agent.buffer)}")
 
 
 # ─────────────────────────────────────────
@@ -462,11 +530,16 @@ def warmup_buffer(agent,
 def train_tascar():
     """
     Main TASCAR training loop.
-    Fixed version with:
-    1. Buffer warmup
-    2. Proper reward normalization
-    3. Multiple SAC updates per step
-    4. Dynamic theta
+
+    Key fixes over previous version:
+    1. TASCAR_DELTA=1000 (was 10000)
+       100 steps/episode (was 10)
+    2. Buffer warmup phase
+       2000 experiences before learning
+    3. Proper reward normalization
+       Same scale as CASR!
+    4. 10 SAC updates per step
+       Faster learning!
     """
     os.makedirs(
         TASCAR_MODEL_PATH,
@@ -484,6 +557,9 @@ def train_tascar():
     print(f"\nTASCAR Configuration:")
     print(f"  State dim:       {state_dim}")
     print(f"  Action dim:      {action_dim}")
+    print(f"  TASCAR delta:    {TASCAR_DELTA}")
+    print(f"  Steps/episode:   "
+          f"{EVAL_CALLS // TASCAR_DELTA}")
     print(f"  Sequence length: "
           f"{SEQUENCE_LENGTH}")
     print(f"  Transformer dim: "
@@ -505,7 +581,7 @@ def train_tascar():
         action_dim=action_dim,
         transformer=transformer)
 
-    # Warmup buffer first!
+    # Warmup buffer!
     warmup_buffer(
         agent,
         train_data,
@@ -513,9 +589,7 @@ def train_tascar():
         warmup_episodes=20)
 
     # Reward normalizer
-    reward_norm = RewardNormalizer()
-
-    # Logger
+    reward_norm   = RewardNormalizer()
     logger        = TASCARLogger()
     calls_per_ep  = EVAL_CALLS
     current_theta = THETA
@@ -526,7 +600,6 @@ def train_tascar():
     for episode in range(
             1, TASCAR_EPISODES + 1):
 
-        # Random start
         max_start = max(
             1,
             len(train_data) -
@@ -541,12 +614,10 @@ def train_tascar():
             episode_calls = (
                 train_data[:calls_per_ep])
 
-        # Fresh S-Cache
         scache  = SCache()
         history = StateHistoryBuffer(
             SEQUENCE_LENGTH, state_dim)
 
-        # Initial state
         raw_state = normalize_state(
             scache.get_state())
         history.add(raw_state)
@@ -554,7 +625,6 @@ def train_tascar():
         encoded_state = (
             agent.get_encoded_state(seq))
 
-        # Episode tracking
         ep_reward      = 0.0
         ep_cold        = 0
         ep_warm        = 0
@@ -568,7 +638,8 @@ def train_tascar():
         for call in episode_calls:
 
             is_warm = (
-                scache.handle_request(call))
+                scache.handle_request(
+                    call))
             if is_warm:
                 step_warm += 1
                 ep_warm   += 1
@@ -577,9 +648,11 @@ def train_tascar():
                 ep_cold   += 1
             call_count += 1
 
-            if call_count % DELTA == 0:
+            # TASCAR_DELTA = 1000
+            # 100 decisions per episode!
+            if (call_count %
+                    TASCAR_DELTA == 0):
 
-                # New state
                 new_raw = normalize_state(
                     scache.get_state())
                 history.add(new_raw)
@@ -590,22 +663,25 @@ def train_tascar():
                         new_seq))
 
                 # Dynamic theta
-                total = step_cold + step_warm
+                total = (
+                    step_cold + step_warm)
                 cold_rate = (
                     step_cold / total
-                    if total > 0 else 0)
+                    if total > 0
+                    else 0)
                 current_theta = (
                     compute_dynamic_theta(
                         cold_rate,
                         current_theta))
 
-                # Proper normalized reward!
+                # Normalized reward!
                 current_wmt = (
                     scache
                     .get_total_wasted_memory_time())
                 wmt_change = max(
                     0,
-                    current_wmt - wmt_before)
+                    current_wmt -
+                    wmt_before)
                 wmt_before = current_wmt
 
                 reward = (
@@ -629,7 +705,7 @@ def train_tascar():
 
                 ep_reward += reward
 
-                # Multiple updates per step!
+                # Multiple updates!
                 for _ in range(
                         SAC_UPDATES_PER_STEP):
                     result = agent.update()
@@ -641,32 +717,37 @@ def train_tascar():
 
                 # Apply action
                 scales = (
-                    agent.action_map[action])
+                    agent.action_map[
+                        action])
                 for q_idx, scale in (
                         enumerate(scales)):
                     if scale != 0:
                         scache.scale_queue(
                             q_idx, scale)
 
-                encoded_state = next_encoded
+                encoded_state = (
+                    next_encoded)
                 step_cold = 0
                 step_warm = 0
 
         # Episode metrics
         total_calls = ep_cold + ep_warm
         cold_pct = (
-            ep_cold / total_calls * 100
-            if total_calls > 0 else 0)
+            ep_cold /
+            total_calls * 100
+            if total_calls > 0
+            else 0)
         final_wmt = (
             scache
             .get_total_wasted_memory_time())
-
         avg_actor = (
             np.mean(ep_actor_loss)
-            if ep_actor_loss else 0)
+            if ep_actor_loss
+            else 0)
         avg_critic = (
             np.mean(ep_critic_loss)
-            if ep_critic_loss else 0)
+            if ep_critic_loss
+            else 0)
 
         logger.log_episode(
             episode,
@@ -677,13 +758,11 @@ def train_tascar():
             avg_actor,
             avg_critic)
 
-        # Save best
         if ep_reward > logger.best_reward:
             agent.save(
                 TASCAR_MODEL_PATH +
                 "best/")
 
-        # Print progress
         if episode % 10 == 0:
             avg_r = np.mean(
                 logger.rewards[-10:])
@@ -692,18 +771,18 @@ def train_tascar():
                 [-10:])
             print(
                 f"Ep {episode:3d} | "
-                f"Reward: {avg_r:6.4f} | "
+                f"Reward: {avg_r:7.4f} | "
                 f"Cold%: {avg_c:5.1f}% | "
                 f"Theta: "
                 f"{current_theta:.3f} | "
                 f"Buffer: "
                 f"{len(agent.buffer):5d}")
 
-        # Checkpoint every 50 episodes
         if episode % 50 == 0:
             agent.save(
                 TASCAR_MODEL_PATH +
-                f"checkpoint_ep{episode}/")
+                f"checkpoint_ep"
+                f"{episode}/")
             logger.save_logs(
                 TASCAR_RESULTS)
             logger.plot_training(
@@ -721,6 +800,10 @@ def train_tascar():
           f"{logger.best_reward:.4f}")
     print(f"Final theta: "
           f"{current_theta:.3f}")
+    print(f"Steps/episode: "
+          f"{EVAL_CALLS // TASCAR_DELTA}")
+    print(f"Total steps: "
+          f"{TASCAR_EPISODES * (EVAL_CALLS // TASCAR_DELTA)}")
     print("=" * 55)
 
     return agent, logger
