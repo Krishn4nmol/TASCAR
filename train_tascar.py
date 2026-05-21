@@ -60,7 +60,6 @@ def load_filtered_data():
     print(f"  Total calls before filter: "
           f"{len(train_data)}")
 
-    # Filter to top functions
     func_counts   = Counter(
         c.function_id
         for c in train_data)
@@ -97,14 +96,14 @@ def compute_dynamic_theta(
     Adapts theta based on cold start rate.
 
     If cold starts too high (>90%):
-    Increase theta → focus more on
+    Increase theta to focus more on
     reducing cold starts!
 
     If cold starts acceptable (<70%):
-    Decrease theta → focus more on
+    Decrease theta to focus more on
     memory efficiency!
 
-    This is key improvement over CASR
+    Key improvement over CASR
     which uses fixed theta = 0.8 always!
     """
     if cold_start_rate > 0.9:
@@ -126,32 +125,37 @@ def compute_dynamic_theta(
 # ─────────────────────────────────────────
 # TRAINING LOGGER
 # Records training progress
-# Generates graphs after training
+# Key names match CASR format!
 # ─────────────────────────────────────────
 
 class TASCARLogger:
     """
-    Records all training metrics
-    for analysis and graphing.
+    Records all training metrics.
+    Uses same key names as CASR
+    for consistency!
     """
     def __init__(self):
-        self.episodes     = []
-        self.rewards      = []
-        self.cold_rates   = []
-        self.wmts         = []
-        self.thetas       = []
-        self.actor_losses = []
-        self.critic_losses = []
-        self.best_reward  = float('-inf')
+        self.episodes         = []
+        self.rewards          = []
+        self.cold_start_rates = []
+        self.wmts             = []
+        self.thetas           = []
+        self.actor_losses     = []
+        self.critic_losses    = []
+        self.best_reward      = float('-inf')
 
-    def log_episode(self, episode,
-                    reward, cold_rate,
-                    wmt, theta,
+    def log_episode(self,
+                    episode,
+                    reward,
+                    cold_rate,
+                    wmt,
+                    theta,
                     actor_loss=None,
                     critic_loss=None):
         self.episodes.append(episode)
         self.rewards.append(reward)
-        self.cold_rates.append(cold_rate)
+        self.cold_start_rates.append(
+            cold_rate)
         self.wmts.append(wmt)
         self.thetas.append(theta)
         if actor_loss is not None:
@@ -165,21 +169,24 @@ class TASCARLogger:
 
     def save_logs(self, path):
         """Save logs to JSON file"""
-        os.makedirs(path, exist_ok=True)
+        os.makedirs(
+            path, exist_ok=True)
         logs = {
-            'episodes':      self.episodes,
-            'rewards':       self.rewards,
-            'cold_rates':    self.cold_rates,
-            'wmts':          self.wmts,
-            'thetas':        self.thetas,
-            'actor_losses':  self.actor_losses,
-            'critic_losses': self.critic_losses,
-            'best_reward':   self.best_reward
+            'episodes':         self.episodes,
+            'rewards':          self.rewards,
+            'cold_start_rates': self.cold_start_rates,
+            'wmts':             self.wmts,
+            'thetas':           self.thetas,
+            'actor_losses':     self.actor_losses,
+            'critic_losses':    self.critic_losses,
+            'best_reward':      self.best_reward
         }
         with open(
-                path + 'training_logs.json',
+                path +
+                'training_logs.json',
                 'w') as f:
-            json.dump(logs, f, indent=2)
+            json.dump(
+                logs, f, indent=2)
         print(f"Logs saved to {path}")
 
     def plot_training(self, path):
@@ -207,29 +214,34 @@ class TASCARLogger:
             label='Smoothed')
         axes[0, 0].set_title(
             'Reward Convergence')
-        axes[0, 0].set_xlabel('Episode')
-        axes[0, 0].set_ylabel('Reward')
+        axes[0, 0].set_xlabel(
+            'Episode')
+        axes[0, 0].set_ylabel(
+            'Reward')
         axes[0, 0].legend()
         axes[0, 0].grid(alpha=0.3)
 
         # Cold start rate
         axes[0, 1].plot(
             self.episodes,
-            self.cold_rates,
+            self.cold_start_rates,
             color='red',
             alpha=0.4,
             linewidth=1)
         axes[0, 1].plot(
             self.episodes,
             self._smooth(
-                self.cold_rates, 10),
+                self.cold_start_rates,
+                10),
             color='darkred',
             linewidth=2.5,
             label='Smoothed')
         axes[0, 1].set_title(
             'Cold Start Rate (%)')
-        axes[0, 1].set_xlabel('Episode')
-        axes[0, 1].set_ylabel('Cold%')
+        axes[0, 1].set_xlabel(
+            'Episode')
+        axes[0, 1].set_ylabel(
+            'Cold%')
         axes[0, 1].legend()
         axes[0, 1].grid(alpha=0.3)
 
@@ -249,8 +261,10 @@ class TASCARLogger:
             label='Smoothed')
         axes[1, 0].set_title(
             'Wasted Memory Time (s)')
-        axes[1, 0].set_xlabel('Episode')
-        axes[1, 0].set_ylabel('WMT (s)')
+        axes[1, 0].set_xlabel(
+            'Episode')
+        axes[1, 0].set_ylabel(
+            'WMT (s)')
         axes[1, 0].legend()
         axes[1, 0].grid(alpha=0.3)
 
@@ -259,7 +273,8 @@ class TASCARLogger:
             self.episodes,
             self.thetas,
             color='purple',
-            linewidth=2)
+            linewidth=2,
+            label='TASCAR theta')
         axes[1, 1].axhline(
             y=0.8,
             color='red',
@@ -267,15 +282,18 @@ class TASCARLogger:
             label='CASR fixed theta=0.8')
         axes[1, 1].set_title(
             'Dynamic Theta Value')
-        axes[1, 1].set_xlabel('Episode')
-        axes[1, 1].set_ylabel('Theta')
+        axes[1, 1].set_xlabel(
+            'Episode')
+        axes[1, 1].set_ylabel(
+            'Theta')
         axes[1, 1].legend()
         axes[1, 1].grid(alpha=0.3)
         axes[1, 1].set_ylim(0.4, 1.0)
 
         plt.tight_layout()
         plt.savefig(
-            path + 'tascar_training.png',
+            path +
+            'tascar_training.png',
             dpi=150,
             bbox_inches='tight')
         plt.close()
@@ -286,7 +304,8 @@ class TASCARLogger:
         for i in range(len(values)):
             start = max(0, i - window)
             smoothed.append(
-                np.mean(values[start:i+1]))
+                np.mean(
+                    values[start:i+1]))
         return smoothed
 
 
@@ -298,8 +317,8 @@ def train_tascar():
     """
     Main TASCAR training loop.
 
-    Key differences from CASR train.py:
-    1. Uses SAC instead of PPO
+    Key differences from CASR:
+    1. SAC instead of PPO
     2. Transformer encodes state sequence
     3. Dynamic theta adaptation
     4. Off-policy replay buffer
@@ -311,11 +330,9 @@ def train_tascar():
         TASCAR_RESULTS,
         exist_ok=True)
 
-    # Load training data
     print("\nLoading Azure dataset...")
     train_data = load_filtered_data()
 
-    # Dimensions
     state_dim  = NUM_QUEUES * 7
     action_dim = 3 ** NUM_QUEUES
 
@@ -353,7 +370,8 @@ def train_tascar():
         # Random start for diversity
         max_start = max(
             1,
-            len(train_data) - calls_per_ep)
+            len(train_data) -
+            calls_per_ep)
         start_idx = np.random.randint(
             0, max_start)
         episode_calls = train_data[
@@ -378,30 +396,32 @@ def train_tascar():
         std  = np.std(raw_state)
         if std > 0:
             raw_state = (
-                (raw_state - mean) / std)
+                (raw_state - mean) /
+                std)
         history.add(raw_state)
 
         # Get encoded initial state
-        seq           = history.get_sequence()
+        seq = history.get_sequence()
         encoded_state = (
             agent.get_encoded_state(seq))
 
         # Episode tracking
-        ep_reward   = 0.0
-        ep_cold     = 0
-        ep_warm     = 0
-        step_cold   = 0
-        step_warm   = 0
-        call_count  = 0
-        wmt_before  = 0.0
+        ep_reward      = 0.0
+        ep_cold        = 0
+        ep_warm        = 0
+        step_cold      = 0
+        step_warm      = 0
+        call_count     = 0
+        wmt_before     = 0.0
         ep_actor_loss  = []
         ep_critic_loss = []
 
         for call in episode_calls:
 
             # Process call
-            is_warm = scache.handle_request(
-                call)
+            is_warm = (
+                scache.handle_request(
+                    call))
 
             if is_warm:
                 step_warm += 1
@@ -412,7 +432,8 @@ def train_tascar():
 
             call_count += 1
 
-            # Agent decides every DELTA calls
+            # Agent decides every
+            # DELTA calls
             if call_count % DELTA == 0:
 
                 # Get new raw state
@@ -423,19 +444,22 @@ def train_tascar():
                 std  = np.std(new_raw)
                 if std > 0:
                     new_raw = (
-                        (new_raw - mean) /
-                        std)
+                        (new_raw - mean)
+                        / std)
 
                 history.add(new_raw)
                 new_seq = (
-                    history.get_sequence())
+                    history
+                    .get_sequence())
                 next_encoded = (
-                    agent.get_encoded_state(
+                    agent
+                    .get_encoded_state(
                         new_seq))
 
-                # Dynamic theta
+                # Dynamic theta!
                 total_step = (
-                    step_cold + step_warm)
+                    step_cold +
+                    step_warm)
                 cold_rate = (
                     step_cold /
                     total_step
@@ -453,7 +477,8 @@ def train_tascar():
                     .get_total_wasted_memory_time())
                 wmt_change = max(
                     0,
-                    current_wmt - wmt_before)
+                    current_wmt -
+                    wmt_before)
                 wmt_before = current_wmt
 
                 r1_norm = min(
@@ -482,7 +507,7 @@ def train_tascar():
 
                 ep_reward += reward
 
-                # Update SAC agent
+                # Update SAC
                 result = agent.update()
                 if result[0] is not None:
                     ep_actor_loss.append(
@@ -490,35 +515,44 @@ def train_tascar():
                     ep_critic_loss.append(
                         result[1])
 
-                # Apply action to queues
+                # Apply action
                 scales = (
-                    agent.action_map[action])
+                    agent
+                    .action_map[action])
                 for q_idx, scale in (
-                        enumerate(scales)):
+                        enumerate(
+                            scales)):
                     if scale != 0:
-                        scache.scale_queue(
-                            q_idx, scale)
+                        scache\
+                            .scale_queue(
+                            q_idx,
+                            scale)
 
-                # Reset step counters
-                encoded_state = next_encoded
+                # Update state
+                encoded_state = (
+                    next_encoded)
                 step_cold = 0
                 step_warm = 0
 
         # Episode complete
         total_calls = ep_cold + ep_warm
         cold_pct = (
-            ep_cold / total_calls * 100
-            if total_calls > 0 else 0)
+            ep_cold /
+            total_calls * 100
+            if total_calls > 0
+            else 0)
         final_wmt = (
             scache
             .get_total_wasted_memory_time())
 
         avg_actor = (
             np.mean(ep_actor_loss)
-            if ep_actor_loss else 0)
+            if ep_actor_loss
+            else 0)
         avg_critic = (
             np.mean(ep_critic_loss)
-            if ep_critic_loss else 0)
+            if ep_critic_loss
+            else 0)
 
         # Log episode
         logger.log_episode(
@@ -536,12 +570,13 @@ def train_tascar():
                 TASCAR_MODEL_PATH +
                 "best/")
 
-        # Print progress
+        # Print every 10 episodes
         if episode % 10 == 0:
             avg_r = np.mean(
                 logger.rewards[-10:])
             avg_c = np.mean(
-                logger.cold_rates[-10:])
+                logger.cold_start_rates
+                [-10:])
             print(
                 f"Ep {episode:3d} | "
                 f"Reward: {avg_r:6.3f} | "
@@ -574,7 +609,7 @@ def train_tascar():
           f"{logger.best_reward:.4f}")
     print(f"Final theta: "
           f"{current_theta:.3f}")
-    print(f"Model saved to: "
+    print(f"Model saved: "
           f"{TASCAR_MODEL_PATH}")
     print("=" * 55)
 
