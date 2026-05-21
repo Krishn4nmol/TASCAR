@@ -1,5 +1,5 @@
 # config.py
-# All settings for CASR project
+# All settings for CASR and TASCAR project
 
 # ─────────────────────────────────────────
 # DATASET SETTINGS
@@ -13,8 +13,6 @@ TEST_DAYS  = [6, 7]
 # ─────────────────────────────────────────
 NUM_QUEUES             = 3
 QUEUE_BOUNDARIES       = [0, 1, 60, float('inf')]
-
-# Higher initial capacity = better results
 INITIAL_QUEUE_CAPACITY = [5000, 500, 100]
 WINDOW_CACHE_RATIO     = 0.2
 
@@ -26,15 +24,11 @@ DEFAULT_CONTAINER_MEMORY_MB = 128
 
 # ─────────────────────────────────────────
 # KEY SETTING: NUMBER OF FUNCTIONS
-# This must match between train and evaluate
-# 2000 = realistic single server simulation
 # ─────────────────────────────────────────
 NUM_FUNCTIONS = 2000
 
 # ─────────────────────────────────────────
 # KEY SETTING: CALLS PER WORKLOAD
-# Higher = more accurate but slower
-# 100000 = good balance
 # ─────────────────────────────────────────
 EVAL_CALLS = 100000
 
@@ -46,7 +40,7 @@ DELTA          = 10000
 SCALING_FACTOR = 0.25
 
 # ─────────────────────────────────────────
-# PPO SETTINGS
+# PPO SETTINGS (CASR)
 # Exact values from paper Table 2
 # ─────────────────────────────────────────
 LEARNING_RATE_ACTOR  = 0.001
@@ -83,13 +77,44 @@ RESULTS_PATH         = "results/"
 # COOLING SETTINGS
 # Prevents laptop overheating
 # ─────────────────────────────────────────
-COOLING_BETWEEN_ALGORITHMS = 30   # seconds
-COOLING_BETWEEN_WORKLOADS  = 120  # seconds
+COOLING_BETWEEN_ALGORITHMS = 30
+COOLING_BETWEEN_WORKLOADS  = 120
 
 # ─────────────────────────────────────────
-# YOUR OWN EXPERIMENT
-# Change NUM_QUEUES to 4 when experimenting
+# TASCAR: TRANSFORMER SETTINGS
 # ─────────────────────────────────────────
-YOUR_NUM_QUEUES       = 4
-YOUR_QUEUE_BOUNDARIES = [0, 1, 30, 60,
-                         float('inf')]
+SEQUENCE_LENGTH    = 10
+TRANSFORMER_DIM    = 64
+TRANSFORMER_HEADS  = 4
+TRANSFORMER_LAYERS = 2
+TRANSFORMER_FF_DIM = 128
+DROPOUT_RATE       = 0.1
+
+# ─────────────────────────────────────────
+# TASCAR: SAC SETTINGS
+# ─────────────────────────────────────────
+SAC_ALPHA       = 0.2
+SAC_TAU         = 0.005
+SAC_GAMMA       = 0.63
+SAC_LR_ACTOR    = 0.0003
+SAC_LR_CRITIC   = 0.0003
+SAC_LR_ALPHA    = 0.0003
+SAC_BUFFER_SIZE = 10000
+SAC_BATCH_SIZE  = 256
+SAC_UPDATE_FREQ = 1
+AUTO_ENTROPY    = True
+TARGET_ENTROPY  = -1.0
+
+# ─────────────────────────────────────────
+# TASCAR: DYNAMIC REWARD SETTINGS
+# ─────────────────────────────────────────
+THETA_MIN       = 0.5
+THETA_MAX       = 0.9
+THETA_ADAPT_RATE = 0.01
+
+# ─────────────────────────────────────────
+# TASCAR: TRAINING SETTINGS
+# ─────────────────────────────────────────
+TASCAR_EPISODES   = 200
+TASCAR_MODEL_PATH = "trained_model_tascar/"
+TASCAR_RESULTS    = "results_tascar/"
