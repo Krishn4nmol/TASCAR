@@ -1,0 +1,28 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+casr_env/
+
+# Dataset files (too large for GitHub)
+data/
+
+# Trained models
+trained_model/
+trained_model_tascar/
+
+# Results
+results/
+results_tascar/
+
+# Environment files
+.env
+
+# VS Code settings
+.vscode/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
