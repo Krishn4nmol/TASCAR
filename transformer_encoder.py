@@ -2,6 +2,7 @@
 # Processes sequence of past states
 # Learns temporal patterns in workload
 # Key innovation of TASCAR!
+# Fixed with NaN protection!
 
 import torch
 import torch.nn as nn
@@ -17,22 +18,30 @@ from config import (
 )
 
 
+# ─────────────────────────────────────────
+# POSITIONAL ENCODING
+# Tells Transformer order of states
+# State 1 came first
+# State 10 is most recent
+# ─────────────────────────────────────────
+
 class PositionalEncoding(nn.Module):
     """
-    Adds position information to sequence
-    Transformer needs to know ORDER
-    of states in sequence!
+    Adds position information to sequence.
 
-    Like numbering sentences:
-    State 1 came first
-    State 2 came second
-    State 10 is most recent
+    Transformer has no built-in sense
+    of order! Without this it cannot
+    tell which state came first!
+
+    Like numbering paragraphs so reader
+    knows the order!
     """
     def __init__(self, dim,
                  max_len=100):
         super().__init__()
 
-        pe = torch.zeros(max_len, dim)
+        pe       = torch.zeros(
+            max_len, dim)
         position = torch.arange(
             0, max_len
         ).unsqueeze(1).float()
@@ -56,27 +65,41 @@ class PositionalEncoding(nn.Module):
             :, :x.size(1), :]
 
 
+# ─────────────────────────────────────────
+# TRANSFORMER ENCODER
+# Main temporal learning component
+# Takes last 10 states as input
+# Returns enriched state for SAC agent
+# ─────────────────────────────────────────
+
 class TransformerEncoder(nn.Module):
     """
-    Main Transformer Encoder
+    Main Transformer Encoder.
 
-    Takes last 10 S-Cache states
+    Takes last SEQUENCE_LENGTH=10
+    S-Cache states as input.
+
     Learns temporal patterns:
     - Burst behavior
     - Periodic patterns
     - Long range dependencies
+    - Cross queue relationships
 
-    Returns enriched state for SAC agent!
+    Returns enriched 64-dim state
+    for SAC agent!
 
     Input:  (batch, seq_len, state_dim)
     Output: (batch, TRANSFORMER_DIM)
+
+    Fixed with NaN protection!
     """
     def __init__(self, state_dim):
         super().__init__()
 
         self.state_dim = state_dim
 
-        # Project input to transformer dim
+        # Project input to
+        # transformer dimension
         self.input_projection = nn.Linear(
             state_dim,
             TRANSFORMER_DIM)
@@ -91,17 +114,20 @@ class TransformerEncoder(nn.Module):
             nn.TransformerEncoderLayer(
                 d_model=TRANSFORMER_DIM,
                 nhead=TRANSFORMER_HEADS,
-                dim_feedforward=TRANSFORMER_FF_DIM,
+                dim_feedforward=(
+                    TRANSFORMER_FF_DIM),
                 dropout=DROPOUT_RATE,
                 batch_first=True))
 
         self.transformer = (
             nn.TransformerEncoder(
                 encoder_layer,
-                num_layers=TRANSFORMER_LAYERS))
+                num_layers=(
+                    TRANSFORMER_LAYERS)))
 
         # Cross-queue attention
-        # Queues communicate with each other!
+        # Queues communicate!
+        # Key innovation!
         self.cross_queue_attention = (
             nn.MultiheadAttention(
                 embed_dim=TRANSFORMER_DIM,
@@ -130,21 +156,35 @@ class TransformerEncoder(nn.Module):
 
     def forward(self, state_sequence):
         """
-        Process sequence of states
+        Process sequence of states.
 
-        state_sequence:
+        state_sequence shape:
         (batch, seq_len, state_dim)
         OR
         (seq_len, state_dim)
+
+        Returns enriched state vector!
         """
         # Add batch dim if needed
         if state_sequence.dim() == 2:
             state_sequence = (
                 state_sequence.unsqueeze(0))
 
+        # Check for NaN in input!
+        if torch.isnan(
+                state_sequence).any():
+            state_sequence = torch.nan_to_num(
+                state_sequence,
+                nan=0.0)
+
         # Project to transformer dim
         x = self.input_projection(
             state_sequence)
+
+        # Check for NaN after projection
+        if torch.isnan(x).any():
+            x = torch.nan_to_num(
+                x, nan=0.0)
 
         # Add positional encoding
         x = self.pos_encoding(x)
@@ -154,27 +194,51 @@ class TransformerEncoder(nn.Module):
         # Learns temporal patterns!
         x = self.transformer(x)
 
+        # Check for NaN after transformer
+        if torch.isnan(x).any():
+            x = torch.nan_to_num(
+                x, nan=0.0)
+
         # Cross-queue attention
         # Last timestep as query
         query = x[:, -1:, :]
 
-        attended, _ = (
-            self.cross_queue_attention(
-                query, x, x))
+        try:
+            attended, _ = (
+                self.cross_queue_attention(
+                    query, x, x))
+            # NaN check on attention
+            if torch.isnan(
+                    attended).any():
+                attended = query
+        except Exception:
+            attended = query
 
         # Combine last hidden
         # with attended features
         last_hidden = x[:, -1, :]
-        combined = (
+        combined    = (
             last_hidden +
             attended.squeeze(1))
         combined = self.layer_norm(
             combined)
 
+        # Check for NaN
+        if torch.isnan(combined).any():
+            combined = torch.nan_to_num(
+                combined, nan=0.0)
+
         # Final projection
         output = (
             self.output_projection(
                 combined))
+
+        # Final NaN protection!
+        output = torch.nan_to_num(
+            output,
+            nan=0.0,
+            posinf=1.0,
+            neginf=-1.0)
 
         return output.squeeze(0)
 
@@ -182,14 +246,23 @@ class TransformerEncoder(nn.Module):
         return TRANSFORMER_DIM
 
 
+# ─────────────────────────────────────────
+# STATE HISTORY BUFFER
+# Stores last N states
+# Feeds sequence to Transformer
+# ─────────────────────────────────────────
+
 class StateHistoryBuffer:
     """
-    Stores last N states
-    Feeds sequence to Transformer
+    Stores last SEQUENCE_LENGTH states.
+    Feeds sequence to Transformer.
 
     Short term memory for agent!
-    Remembers last 10 observations
+    Remembers last 10 observations!
     Transformer finds patterns in them!
+
+    If not enough history yet:
+    Pads beginning with zeros!
     """
     def __init__(self,
                  sequence_length,
@@ -201,9 +274,13 @@ class StateHistoryBuffer:
 
     def add(self, state):
         """Add new state to buffer"""
-        self.buffer.append(
-            np.array(state,
-                     dtype=np.float32))
+        # NaN check before adding!
+        state = np.array(
+            state, dtype=np.float32)
+        if np.isnan(state).any():
+            state = np.zeros_like(state)
+
+        self.buffer.append(state)
 
         # Keep only last N states
         if len(self.buffer) > (
@@ -212,14 +289,18 @@ class StateHistoryBuffer:
 
     def get_sequence(self):
         """
-        Get padded sequence
+        Get padded sequence.
+
         If not enough history:
-        pad beginning with zeros
+        pad beginning with zeros!
+
+        Always returns array of shape:
+        (sequence_length, state_dim)
         """
         if len(self.buffer) == 0:
-            return np.zeros((
-                self.sequence_length,
-                self.state_dim),
+            return np.zeros(
+                (self.sequence_length,
+                 self.state_dim),
                 dtype=np.float32)
 
         # Pad if history too short
@@ -240,12 +321,19 @@ class StateHistoryBuffer:
             sequence = self.buffer[
                 -self.sequence_length:]
 
-        return np.array(
+        result = np.array(
             sequence,
             dtype=np.float32)
 
+        # Final NaN check!
+        if np.isnan(result).any():
+            result = np.nan_to_num(
+                result, nan=0.0)
+
+        return result
+
     def reset(self):
-        """Clear at episode start"""
+        """Clear buffer at episode start"""
         self.buffer = []
 
     def is_ready(self):
