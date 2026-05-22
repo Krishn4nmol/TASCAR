@@ -1,7 +1,10 @@
 # train_tascar.py
 # Training script for TASCAR
-# Uses SAC + Transformer encoder
-# Fixed with proper delta and warmup!
+# Fixed version with:
+# 1. Averaged reward per step
+# 2. Realistic theta thresholds
+# 3. Buffer warmup
+# 4. Proper reward normalization
 
 import numpy as np
 import json
@@ -86,7 +89,7 @@ def load_filtered_data():
 
 def normalize_state(raw_state):
     """
-    Normalize state to zero mean
+    Normalize to zero mean
     unit variance.
     Same as CASR environment.py!
     """
@@ -103,6 +106,8 @@ def normalize_state(raw_state):
 # ─────────────────────────────────────────
 # DYNAMIC THETA
 # Key innovation of TASCAR!
+# Realistic thresholds for
+# serverless workloads!
 # ─────────────────────────────────────────
 
 def compute_dynamic_theta(
@@ -111,21 +116,28 @@ def compute_dynamic_theta(
     """
     Adapts theta based on performance.
 
-    Cold starts too high (>90%):
-    Increase theta → focus on cold starts!
+    Realistic thresholds:
+    Since serverless cold% is
+    typically 85-95% range!
 
-    Cold starts acceptable (<70%):
-    Decrease theta → focus on memory!
+    >95%: Very high cold starts
+          Increase theta aggressively!
+
+    <85%: Cold starts improving!
+          Start focusing on memory!
+
+    85-95%: Normal operating range
+            Keep theta stable!
 
     CASR uses fixed theta=0.8 always.
     TASCAR adapts automatically!
     """
-    if cold_start_rate > 0.9:
+    if cold_start_rate > 0.95:
         new_theta = min(
             current_theta +
             THETA_ADAPT_RATE,
             THETA_MAX)
-    elif cold_start_rate < 0.7:
+    elif cold_start_rate < 0.85:
         new_theta = max(
             current_theta -
             THETA_ADAPT_RATE,
@@ -144,15 +156,14 @@ def compute_dynamic_theta(
 class RewardNormalizer:
     """
     Normalizes reward exactly like
-    CASR environment.py does!
+    CASR environment.py!
 
-    Without this TASCAR reward was -8.3
-    CASR reward was -0.04
-    Not comparable!
+    Tracks min/max of R1 and R2
+    Normalizes to 0-1 range
+    Combines with theta weighting
 
-    With this both rewards are
-    in same range -1.0 to 0.0
-    Fair comparison!
+    Result: reward in range -1 to 0
+    Same scale as CASR!
     """
     def __init__(self):
         self.r1_min =  float('inf')
@@ -176,14 +187,16 @@ class RewardNormalizer:
         if r2 > self.r2_max:
             self.r2_max = r2
 
-        r1_range = self.r1_max - self.r1_min
+        r1_range = (
+            self.r1_max - self.r1_min)
         r1_norm  = (
             (r1 - self.r1_min) /
             r1_range
             if r1_range > 0
             else 0.0)
 
-        r2_range = self.r2_max - self.r2_min
+        r2_range = (
+            self.r2_max - self.r2_min)
         r2_norm  = (
             (r2 - self.r2_min) /
             r2_range
@@ -203,7 +216,7 @@ class RewardNormalizer:
 
 class TASCARLogger:
     """
-    Records training metrics.
+    Records all training metrics.
     Same key names as CASR for
     consistency!
     """
@@ -215,7 +228,8 @@ class TASCARLogger:
         self.thetas           = []
         self.actor_losses     = []
         self.critic_losses    = []
-        self.best_reward      = float('-inf')
+        self.best_reward      = float(
+            '-inf')
 
     def log_episode(self,
                     episode,
@@ -272,6 +286,7 @@ class TASCARLogger:
             fontsize=14,
             fontweight='bold')
 
+        # Reward convergence
         axes[0, 0].plot(
             self.episodes,
             self.rewards,
@@ -287,11 +302,14 @@ class TASCARLogger:
             label='Smoothed')
         axes[0, 0].set_title(
             'Reward Convergence')
-        axes[0, 0].set_xlabel('Episode')
-        axes[0, 0].set_ylabel('Reward')
+        axes[0, 0].set_xlabel(
+            'Episode')
+        axes[0, 0].set_ylabel(
+            'Avg Reward per Step')
         axes[0, 0].legend()
         axes[0, 0].grid(alpha=0.3)
 
+        # Cold start rate
         axes[0, 1].plot(
             self.episodes,
             self.cold_start_rates,
@@ -308,11 +326,14 @@ class TASCARLogger:
             label='Smoothed')
         axes[0, 1].set_title(
             'Cold Start Rate (%)')
-        axes[0, 1].set_xlabel('Episode')
-        axes[0, 1].set_ylabel('Cold%')
+        axes[0, 1].set_xlabel(
+            'Episode')
+        axes[0, 1].set_ylabel(
+            'Cold%')
         axes[0, 1].legend()
         axes[0, 1].grid(alpha=0.3)
 
+        # WMT
         axes[1, 0].plot(
             self.episodes,
             self.wmts,
@@ -328,11 +349,14 @@ class TASCARLogger:
             label='Smoothed')
         axes[1, 0].set_title(
             'Wasted Memory Time (s)')
-        axes[1, 0].set_xlabel('Episode')
-        axes[1, 0].set_ylabel('WMT (s)')
+        axes[1, 0].set_xlabel(
+            'Episode')
+        axes[1, 0].set_ylabel(
+            'WMT (s)')
         axes[1, 0].legend()
         axes[1, 0].grid(alpha=0.3)
 
+        # Dynamic theta
         axes[1, 1].plot(
             self.episodes,
             self.thetas,
@@ -346,8 +370,10 @@ class TASCARLogger:
             label='CASR fixed=0.8')
         axes[1, 1].set_title(
             'Dynamic Theta')
-        axes[1, 1].set_xlabel('Episode')
-        axes[1, 1].set_ylabel('Theta')
+        axes[1, 1].set_xlabel(
+            'Episode')
+        axes[1, 1].set_ylabel(
+            'Theta')
         axes[1, 1].legend()
         axes[1, 1].grid(alpha=0.3)
         axes[1, 1].set_ylim(0.4, 1.0)
@@ -373,7 +399,8 @@ class TASCARLogger:
 
 # ─────────────────────────────────────────
 # WARMUP BUFFER
-# Fill buffer before training!
+# Fill buffer with random experiences
+# Before actual training starts!
 # Critical for SAC learning!
 # ─────────────────────────────────────────
 
@@ -383,35 +410,30 @@ def warmup_buffer(agent,
                   warmup_episodes=20):
     """
     Fills replay buffer with random
-    experiences before training starts!
+    experiences before training!
 
     Why needed:
     SAC is OFF-POLICY
-    Needs diverse experiences first
-    Before policy gradient updates work!
+    Needs diverse experiences first!
 
     CASR PPO is ON-POLICY
-    Does not need this warmup!
+    Does not need this!
 
     With TASCAR_DELTA=1000:
     Each episode = 100 steps
-    20 warmup episodes = 2000 experiences
+    20 episodes = 2000 experiences
     Enough to start learning!
     """
     steps_per_ep = (
         EVAL_CALLS // TASCAR_DELTA)
 
-    print(
-        f"\nWarming up buffer...")
-    print(
-        f"  Episodes:        "
-        f"{warmup_episodes}")
-    print(
-        f"  Steps/episode:   "
-        f"{steps_per_ep}")
-    print(
-        f"  Expected buffer: "
-        f"{warmup_episodes * steps_per_ep}")
+    print(f"\nWarming up buffer...")
+    print(f"  Episodes:        "
+          f"{warmup_episodes}")
+    print(f"  Steps/episode:   "
+          f"{steps_per_ep}")
+    print(f"  Expected buffer: "
+          f"{warmup_episodes * steps_per_ep}")
 
     for ep in range(warmup_episodes):
         max_start = max(
@@ -473,8 +495,8 @@ def warmup_buffer(agent,
                     step_cold + step_warm)
                 cold_rate = (
                     step_cold / total
-                    if total > 0 else 0)
-
+                    if total > 0
+                    else 0)
                 current_wmt = (
                     scache
                     .get_total_wasted_memory_time())
@@ -531,15 +553,16 @@ def train_tascar():
     """
     Main TASCAR training loop.
 
-    Key fixes over previous version:
-    1. TASCAR_DELTA=1000 (was 10000)
-       100 steps/episode (was 10)
-    2. Buffer warmup phase
-       2000 experiences before learning
-    3. Proper reward normalization
-       Same scale as CASR!
-    4. 10 SAC updates per step
-       Faster learning!
+    Key fixes:
+    1. TASCAR_DELTA=1000 not 10000
+       100 steps per episode!
+    2. Reward averaged per step
+       not summed!
+    3. Realistic theta thresholds
+       85-95% range!
+    4. Buffer warmup phase
+    5. Proper reward normalization
+    6. 10 SAC updates per step
     """
     os.makedirs(
         TASCAR_MODEL_PATH,
@@ -554,12 +577,15 @@ def train_tascar():
     state_dim  = NUM_QUEUES * 7
     action_dim = 3 ** NUM_QUEUES
 
+    # Steps per episode
+    steps_per_ep = (
+        EVAL_CALLS // TASCAR_DELTA)
+
     print(f"\nTASCAR Configuration:")
     print(f"  State dim:       {state_dim}")
     print(f"  Action dim:      {action_dim}")
     print(f"  TASCAR delta:    {TASCAR_DELTA}")
-    print(f"  Steps/episode:   "
-          f"{EVAL_CALLS // TASCAR_DELTA}")
+    print(f"  Steps/episode:   {steps_per_ep}")
     print(f"  Sequence length: "
           f"{SEQUENCE_LENGTH}")
     print(f"  Transformer dim: "
@@ -600,6 +626,7 @@ def train_tascar():
     for episode in range(
             1, TASCAR_EPISODES + 1):
 
+        # Random episode start
         max_start = max(
             1,
             len(train_data) -
@@ -614,10 +641,12 @@ def train_tascar():
             episode_calls = (
                 train_data[:calls_per_ep])
 
+        # Fresh S-Cache each episode
         scache  = SCache()
         history = StateHistoryBuffer(
             SEQUENCE_LENGTH, state_dim)
 
+        # Initial state
         raw_state = normalize_state(
             scache.get_state())
         history.add(raw_state)
@@ -625,6 +654,7 @@ def train_tascar():
         encoded_state = (
             agent.get_encoded_state(seq))
 
+        # Episode tracking
         ep_reward      = 0.0
         ep_cold        = 0
         ep_warm        = 0
@@ -632,6 +662,7 @@ def train_tascar():
         step_warm      = 0
         call_count     = 0
         wmt_before     = 0.0
+        steps_done     = 0
         ep_actor_loss  = []
         ep_critic_loss = []
 
@@ -653,6 +684,7 @@ def train_tascar():
             if (call_count %
                     TASCAR_DELTA == 0):
 
+                # New state
                 new_raw = normalize_state(
                     scache.get_state())
                 history.add(new_raw)
@@ -662,7 +694,8 @@ def train_tascar():
                     agent.get_encoded_state(
                         new_seq))
 
-                # Dynamic theta
+                # Dynamic theta with
+                # realistic thresholds!
                 total = (
                     step_cold + step_warm)
                 cold_rate = (
@@ -703,9 +736,10 @@ def train_tascar():
                     next_encoded,
                     False)
 
-                ep_reward += reward
+                ep_reward  += reward
+                steps_done += 1
 
-                # Multiple updates!
+                # Multiple SAC updates!
                 for _ in range(
                         SAC_UPDATES_PER_STEP):
                     result = agent.update()
@@ -715,7 +749,7 @@ def train_tascar():
                         ep_critic_loss.append(
                             result[1])
 
-                # Apply action
+                # Apply action to queues
                 scales = (
                     agent.action_map[
                         action])
@@ -740,6 +774,14 @@ def train_tascar():
         final_wmt = (
             scache
             .get_total_wasted_memory_time())
+
+        # AVERAGE reward per step!
+        # Not cumulative sum!
+        avg_ep_reward = (
+            ep_reward / steps_done
+            if steps_done > 0
+            else ep_reward)
+
         avg_actor = (
             np.mean(ep_actor_loss)
             if ep_actor_loss
@@ -749,20 +791,24 @@ def train_tascar():
             if ep_critic_loss
             else 0)
 
+        # Log averaged reward!
         logger.log_episode(
             episode,
-            ep_reward,
+            avg_ep_reward,
             cold_pct,
             final_wmt,
             current_theta,
             avg_actor,
             avg_critic)
 
-        if ep_reward > logger.best_reward:
+        # Save best model
+        if avg_ep_reward > (
+                logger.best_reward):
             agent.save(
                 TASCAR_MODEL_PATH +
                 "best/")
 
+        # Print progress
         if episode % 10 == 0:
             avg_r = np.mean(
                 logger.rewards[-10:])
@@ -778,6 +824,7 @@ def train_tascar():
                 f"Buffer: "
                 f"{len(agent.buffer):5d}")
 
+        # Checkpoint every 50 episodes
         if episode % 50 == 0:
             agent.save(
                 TASCAR_MODEL_PATH +
@@ -796,14 +843,13 @@ def train_tascar():
 
     print("\n" + "=" * 55)
     print("TASCAR Training Complete!")
-    print(f"Best reward: "
+    print(f"Best reward:   "
           f"{logger.best_reward:.4f}")
-    print(f"Final theta: "
+    print(f"Final theta:   "
           f"{current_theta:.3f}")
-    print(f"Steps/episode: "
-          f"{EVAL_CALLS // TASCAR_DELTA}")
-    print(f"Total steps: "
-          f"{TASCAR_EPISODES * (EVAL_CALLS // TASCAR_DELTA)}")
+    print(f"Steps/episode: {steps_per_ep}")
+    print(f"Total steps:   "
+          f"{TASCAR_EPISODES * steps_per_ep}")
     print("=" * 55)
 
     return agent, logger
