@@ -1,4 +1,4 @@
-# TASCAR: Transformer-Attention Soft Actor-Critic for Serverless Computing
+# TASCAR: Transformer-Attention Soft Actor-Critic for Adaptive Resource Optimization in Serverless Computing
 
 ## Adaptive Resource Optimization using Temporal Attention and SAC
 
