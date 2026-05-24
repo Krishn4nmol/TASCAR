@@ -12,7 +12,7 @@ data/
 
 # Trained models
 trained_model/
-trained_model_ta
+trained_model_t
 
 # Environment files
 .env
