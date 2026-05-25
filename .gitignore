@@ -18,7 +18,7 @@ trained_model_tascar/
 .env
 
 # VS Code settings
-.vsco
+.vscode
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
