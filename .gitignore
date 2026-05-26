@@ -21,4 +21,4 @@ trained_model_tascar/
 .vscode/
 
 # Jupyter checkpoints
-.ipynb_checkp
+.ipynb_check
