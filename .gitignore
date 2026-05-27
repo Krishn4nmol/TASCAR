@@ -5,7 +5,7 @@ __pycache__/
 *.pyd
 
 # Virtual environment
-casr_env
+casr_en
 
 # Dataset files (too large for GitHub)
 data/
