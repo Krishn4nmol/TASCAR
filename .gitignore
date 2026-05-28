@@ -11,7 +11,7 @@ casr_env/
 data/
 
 # Trained models
-trained_
+trained_m
 trained_model_tascar/
 
 # Environment files
