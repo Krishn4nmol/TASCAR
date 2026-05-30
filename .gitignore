@@ -14,7 +14,7 @@ data/
 trained_model/
 trained_model_tascar/
 
-# Environment fi
+# Environment f
 .env
 
 # VS Code settings
