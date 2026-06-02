@@ -1,4 +1,4 @@
-# Py cache files
+# P cache files
 __pycache__/
 *.pyc
 *.pyo
