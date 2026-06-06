@@ -4,7 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Virtual enviro
+# Virtual environ
 casr_env/
 
 # Dataset files (too large for GitHub)
