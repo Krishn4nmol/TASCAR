@@ -128,3 +128,58 @@ THETA_ADAPT_RATE = 0.01
 TASCAR_EPISODES   = 500
 TASCAR_MODEL_PATH = "trained_model_tascar/"
 TASCAR_RESULTS    = "results_tascar/"
+
+# ─────────────────────────────────────────
+# EVALUATION METRICS SETTINGS
+# Professor recommended metrics!
+# ─────────────────────────────────────────
+
+# SLA threshold in seconds
+# Cold start > 2s = SLA violation!
+SLA_THRESHOLD = 2.0
+
+# Carbon intensity kg CO2 per kWh
+# Standard UK grid average!
+CARBON_INTENSITY = 0.233
+
+# Power consumption per GB per second
+# Standard AWS cloud estimate!
+POWER_PER_GB = 0.00125
+
+# Burst detection threshold
+# Requests per second = burst!
+BURST_THRESHOLD = 100
+
+# ─────────────────────────────────────────
+# TPI WEIGHTS
+# TASCAR Performance Index!
+# Must sum to 1.0!
+# ─────────────────────────────────────────
+TPI_W1 = 0.25  # CSR (most important!)
+TPI_W2 = 0.20  # WMT
+TPI_W3 = 0.20  # Throughput
+TPI_W4 = 0.20  # SVR
+TPI_W5 = 0.15  # RUE
+
+# ─────────────────────────────────────────
+# RL METRICS SETTINGS
+# For convergence detection!
+# ─────────────────────────────────────────
+
+# Window to check convergence
+CONVERGENCE_WINDOW = 20
+
+# Reward std below this = converged!
+CONVERGENCE_THRESHOLD = 0.05
+
+# ─────────────────────────────────────────
+# SCALING METRICS SETTINGS
+# For elasticity and SA calculation!
+# ─────────────────────────────────────────
+
+# Expected demand per queue
+# Based on Azure dataset distribution!
+EXPECTED_DEMAND = [5000, 500, 100]
+
+# Elasticity window in calls
+ELASTICITY_WINDOW = 10000
