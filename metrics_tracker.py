@@ -459,7 +459,9 @@ class MetricsTracker:
                 self.get_scaling_accuracy(),
             'elasticity_score':
                 self.get_elasticity_score(),
-
+            # Energy total
+            'total_energy':
+                self.total_energy,
             # Composite
             'tpi': self.compute_tpi(),
         }
