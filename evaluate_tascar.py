@@ -1,7 +1,9 @@
 # evaluate_tascar.py
 # Complete TASCAR vs CASR evaluation
 # Uses MetricsTracker for all metrics!
-# Core SCache behavior unchanged!
+# FIXED: handle_request called FIRST
+# then scaling decision!
+# This matches original CASR behavior!
 
 import numpy as np
 import json
@@ -59,14 +61,19 @@ def compute_agi(casr_csr, tascar_csr):
 
 # ─────────────────────────────────────────
 # CASR ALGORITHM
-# Uses MetricsTracker wrapper!
+# FIXED: handle_request FIRST!
+# then scaling decision!
 # ─────────────────────────────────────────
 
 class CASRAlgorithm:
     """
     CASR with trained PPO model.
     Uses MetricsTracker for metrics!
-    Core SCache behavior unchanged!
+
+    KEY FIX:
+    Process request FIRST!
+    Then check if scaling needed!
+    This matches original CASR!
     """
     def __init__(self,
                  model_path=None):
@@ -107,6 +114,13 @@ class CASRAlgorithm:
 
     def handle_request(self,
                        function_call):
+        # FIXED: Process request FIRST!
+        result = (
+            self.tracker
+            .handle_request(
+                function_call))
+
+        # THEN check scaling!
         self.call_count += 1
         if self.call_count % DELTA == 0:
             state = np.array(
@@ -127,9 +141,8 @@ class CASRAlgorithm:
                     self.tracker\
                         .scale_queue(
                         q_idx, scale)
-        return (self.tracker
-                .handle_request(
-                    function_call))
+
+        return result
 
     def get_total_wasted_memory_time(
             self):
@@ -137,13 +150,13 @@ class CASRAlgorithm:
                 .get_total_wasted_memory_time())
 
     def get_all_metrics(self):
-        return (self.tracker
-                .get_all_metrics())
+        return self.tracker.get_all_metrics()
 
 
 # ─────────────────────────────────────────
 # TASCAR ALGORITHM
-# Uses MetricsTracker wrapper!
+# FIXED: handle_request FIRST!
+# then scaling decision!
 # ─────────────────────────────────────────
 
 class TASCARAlgorithm:
@@ -151,9 +164,14 @@ class TASCARAlgorithm:
     TASCAR with trained SAC +
     Transformer.
     Uses MetricsTracker for metrics!
-    Core SCache behavior unchanged!
+
+    KEY FIX:
+    Process request FIRST!
+    Then check if scaling needed!
+    Matches original CASR behavior!
+
     Uses TASCAR_EVAL_DELTA = 10000
-    Same as CASR for fair comparison!
+    Same as CASR = fair comparison!
     """
     def __init__(self,
                  model_path=None):
@@ -191,6 +209,13 @@ class TASCARAlgorithm:
 
     def handle_request(self,
                        function_call):
+        # FIXED: Process request FIRST!
+        result = (
+            self.tracker
+            .handle_request(
+                function_call))
+
+        # THEN check scaling!
         self.call_count += 1
         if (self.call_count %
                 TASCAR_EVAL_DELTA == 0):
@@ -220,9 +245,8 @@ class TASCARAlgorithm:
                     self.tracker\
                         .scale_queue(
                         q_idx, scale)
-        return (self.tracker
-                .handle_request(
-                    function_call))
+
+        return result
 
     def get_total_wasted_memory_time(
             self):
@@ -230,8 +254,7 @@ class TASCARAlgorithm:
                 .get_total_wasted_memory_time())
 
     def get_all_metrics(self):
-        return (self.tracker
-                .get_all_metrics())
+        return self.tracker.get_all_metrics()
 
 
 # ─────────────────────────────────────────
@@ -282,7 +305,6 @@ def load_rl_metrics():
 
 # ─────────────────────────────────────────
 # LOAD WORKLOADS
-# Exact same as before!
 # ─────────────────────────────────────────
 
 def load_workloads():
@@ -386,6 +408,8 @@ def run_evaluation():
           f"{TASCAR_EVAL_DELTA}")
     print(f"SLA threshold:     "
           f"{SLA_THRESHOLD}s")
+    print(f"Request order:     "
+          f"handle THEN scale!")
     print("=" * 60)
 
     for wl_idx, (wl_name, calls) in (
@@ -454,7 +478,6 @@ def run_evaluation():
             tascar_m = (
                 tascar.get_all_metrics())
 
-            # AGI calculation
             casr_csr = (
                 results[wl_name]
                 .get('CASR', {})
@@ -483,15 +506,10 @@ def run_evaluation():
             results[wl_name][
                 'TASCAR'] = {}
 
-    # Save results
     _save_results(results, rl_metrics)
-
-    # Print summaries
     print_summary(results)
     if rl_metrics:
         print_rl_metrics(rl_metrics)
-
-    # Generate all graphs
     plot_all_comparisons(
         results, rl_metrics)
 
@@ -542,7 +560,8 @@ def print_summary(results):
         ('cold_start_rate',
          'Cold Start Rate (%)', True),
         ('avg_cold_start_overhead',
-         'Avg Cold Start Delay (s)', True),
+         'Avg Cold Start Delay (s)',
+         True),
         ('p95_latency',
          'P95 Latency (s)', True),
         ('p99_latency',
@@ -555,7 +574,8 @@ def print_summary(results):
          'Container Utilization (%)',
          False),
         ('resource_utilization_efficiency',
-         'Resource Util Eff (%)', False),
+         'Resource Util Eff (%)',
+         False),
         ('sla_violation_rate',
          'SLA Violation Rate (%)', True),
         ('throughput',
@@ -564,11 +584,13 @@ def print_summary(results):
          'Successful Exec Ratio (%)',
          False),
         ('energy_per_request',
-         'Energy per Request (kWh)', True),
+         'Energy per Request (kWh)',
+         True),
         ('co2_estimate',
          'CO2 Estimate (kg)', True),
         ('burst_handling_efficiency',
-         'Burst Handling Eff (%)', False),
+         'Burst Handling Eff (%)',
+         False),
         ('scaling_accuracy',
          'Scaling Accuracy (%)', False),
         ('elasticity_score',
@@ -620,6 +642,29 @@ def print_summary(results):
                 f"{tv:>12.4f}"
                 f"{winner:>10}")
 
+    # Print improvement summary
+    print("\n" + "=" * 55)
+    print("IMPROVEMENT SUMMARY")
+    print("=" * 55)
+    for wl in workloads:
+        if wl not in results:
+            continue
+        casr_csr = (
+            results[wl]
+            .get('CASR', {})
+            .get('cold_start_rate', 0))
+        tascar_csr = (
+            results[wl]
+            .get('TASCAR', {})
+            .get('cold_start_rate', 0))
+        diff = casr_csr - tascar_csr
+        symbol = "✅" if diff > 0 else "❌"
+        print(
+            f"  {wl:<15}: "
+            f"CASR={casr_csr:.3f}% "
+            f"TASCAR={tascar_csr:.3f}% "
+            f"Diff={diff:+.3f}pp {symbol}")
+
 
 def print_rl_metrics(rl_metrics):
     print("\n" + "=" * 55)
@@ -641,7 +686,9 @@ def print_rl_metrics(rl_metrics):
     ]
     for label, key, unit in items:
         val = rl_metrics.get(key, 0)
-        print(f"  {label:<25} {val}{unit}")
+        print(
+            f"  {label:<25} "
+            f"{val}{unit}")
 
 
 # ─────────────────────────────────────────
@@ -660,18 +707,23 @@ def plot_all_comparisons(
         'TASCAR': '#FF5722'}
 
     def style_dark(fig, axes_list):
-        fig.patch.set_facecolor('#0a0e1a')
+        fig.patch.set_facecolor(
+            '#0a0e1a')
         for ax in axes_list:
             ax.set_facecolor('#111827')
-            ax.tick_params(colors='white')
-            ax.spines['bottom'].set_color(
+            ax.tick_params(
+                colors='white')
+            ax.spines[
+                'bottom'].set_color(
                 '#334155')
-            ax.spines['left'].set_color(
+            ax.spines[
+                'left'].set_color(
                 '#334155')
             ax.spines[
                 'top'].set_visible(False)
             ax.spines[
-                'right'].set_visible(False)
+                'right'].set_visible(
+                False)
 
     def plot_bars(ax, metric,
                   ylabel, title):
@@ -784,7 +836,8 @@ def plot_all_comparisons(
         bbox_inches='tight',
         facecolor='#0a0e1a')
     plt.close()
-    print("Saved fig2_latency_memory.png")
+    print(
+        "Saved fig2_latency_memory.png")
 
     # Fig 3: Resource
     fig3, axes3 = plt.subplots(
@@ -846,7 +899,8 @@ def plot_all_comparisons(
         bbox_inches='tight',
         facecolor='#0a0e1a')
     plt.close()
-    print("Saved fig4_qos_throughput.png")
+    print(
+        "Saved fig4_qos_throughput.png")
 
     # Fig 5: Energy + Scaling
     fig5, axes5 = plt.subplots(
@@ -877,7 +931,8 @@ def plot_all_comparisons(
         bbox_inches='tight',
         facecolor='#0a0e1a')
     plt.close()
-    print("Saved fig5_energy_scaling.png")
+    print(
+        "Saved fig5_energy_scaling.png")
 
     # Fig 6: TPI + AGI
     fig6, axes6 = plt.subplots(
@@ -889,14 +944,11 @@ def plot_all_comparisons(
         fontweight='bold',
         color='white')
     style_dark(fig6, axes6)
-
-    # TPI
     plot_bars(axes6[0],
               'tpi',
               'TPI Score',
               'TASCAR Performance Index')
 
-    # AGI
     ax2    = axes6[1]
     agis   = [
         results.get(wl, {})
@@ -912,18 +964,23 @@ def plot_all_comparisons(
         edgecolor='white',
         linewidth=0.5)
     for bar, val in zip(bars2, agis):
+        color = (
+            'white' if val >= 0
+            else '#ef4444')
         ax2.text(
             bar.get_x() +
             bar.get_width()/2,
-            bar.get_height() + 0.1,
+            bar.get_height() +
+            (0.1 if val >= 0 else -1.5),
             f'{val:.2f}%',
             ha='center',
             fontsize=10,
             fontweight='bold',
-            color='white')
+            color=color)
     ax2.set_title(
-        'Attention Gain Index (AGI)',
-        fontsize=12,
+        'Attention Gain Index (AGI)\n'
+        '+ve = TASCAR better than CASR!',
+        fontsize=11,
         fontweight='bold',
         color='white')
     ax2.set_ylabel(
@@ -932,6 +989,10 @@ def plot_all_comparisons(
     ax2.grid(
         axis='y', alpha=0.2,
         color='white')
+    ax2.axhline(
+        y=0, color='white',
+        linestyle='-',
+        linewidth=0.5)
     ax2.spines['bottom'].set_color(
         '#334155')
     ax2.spines['left'].set_color(
@@ -939,7 +1000,6 @@ def plot_all_comparisons(
     ax2.spines['top'].set_visible(False)
     ax2.spines[
         'right'].set_visible(False)
-
     plt.tight_layout()
     plt.savefig(
         TASCAR_RESULTS +
@@ -1010,10 +1070,13 @@ def _plot_rl_metrics(rl_metrics):
         ax.set_ylabel(
             ylabel, color='white')
         ax.tick_params(colors='white')
-        ax.grid(alpha=0.2, color='white')
-        ax.spines['bottom'].set_color(
+        ax.grid(
+            alpha=0.2, color='white')
+        ax.spines[
+            'bottom'].set_color(
             '#334155')
-        ax.spines['left'].set_color(
+        ax.spines[
+            'left'].set_color(
             '#334155')
         ax.spines[
             'top'].set_visible(False)
@@ -1027,7 +1090,8 @@ def _plot_rl_metrics(rl_metrics):
             color='#0ea5e9',
             alpha=0.4, linewidth=1)
         axes[0, 0].plot(
-            episodes, smooth(rewards),
+            episodes,
+            smooth(rewards),
             color='#0ea5e9',
             linewidth=2.5,
             label='Smoothed')
@@ -1080,7 +1144,8 @@ def _plot_rl_metrics(rl_metrics):
             alpha=0.7,
             label='TASCAR theta')
         axes[0, 2].plot(
-            episodes, smooth(thetas),
+            episodes,
+            smooth(thetas),
             color='#8b5cf6',
             linewidth=2.5,
             label='Smoothed')
@@ -1140,7 +1205,6 @@ def _plot_rl_metrics(rl_metrics):
             'Training Samples',
             'Reward')
 
-    # Summary text
     axes[1, 2].set_facecolor('#0f172a')
     axes[1, 2].axis('off')
     summary = (
@@ -1311,7 +1375,8 @@ def _plot_master(
         facecolor='#0a0e1a')
     plt.close()
     print(
-        "Saved fig8_master_all_metrics.png")
+        "Saved "
+        "fig8_master_all_metrics.png")
 
 
 # ─────────────────────────────────────────
@@ -1322,10 +1387,13 @@ if __name__ == "__main__":
     print("=" * 60)
     print("TASCAR Complete Evaluation")
     print("MetricsTracker + Original SCache")
+    print("FIXED: handle THEN scale!")
     print("All Professor Metrics!")
     print("8 Graph Sets!")
     print(f"SLA Threshold: {SLA_THRESHOLD}s")
-    print(f"Carbon: {CARBON_INTENSITY} kg/kWh")
+    print(
+        f"Carbon: "
+        f"{CARBON_INTENSITY} kg/kWh")
     print("=" * 60)
 
     tascar_path = (
@@ -1334,6 +1402,7 @@ if __name__ == "__main__":
             tascar_path + "actor.pth"):
         print("\nNo TASCAR model!")
         print(
-            "Run: python train_tascar.py")
+            "Run: "
+            "python train_tascar.py")
     else:
         run_evaluation()
