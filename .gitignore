@@ -5,7 +5,7 @@ __pycache__/
 *.pyd
 .venv/
 
-# Virtual environment
+# Virtual environmen
 casr_env/
 
 # Dataset files (too large for GitHub)
