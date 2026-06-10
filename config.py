@@ -176,3 +176,11 @@ ABLATION_RESULTS = (
 # Ablation training episodes
 # Same as TASCAR for fair comparison!
 ABLATION_EPISODES = 500
+
+# ─────────────────────────────────────────
+# EQUAL BUDGET COMPARISON PATH
+# CASR trained 500 episodes
+# Same budget as TASCAR!
+# ─────────────────────────────────────────
+CASR_500_MODEL_PATH = (
+    "trained_model_casr_500/")

@@ -446,17 +446,21 @@ class PPOAgent:
         import os
         os.makedirs(path, exist_ok=True)
         torch.save(self.actor.state_dict(),
-                  f"{path}/actor.pth")
+                   path + "actor.pth")
         torch.save(self.critic.state_dict(),
-                  f"{path}/critic.pth")
+                   path + "critic.pth")
         print(f"Model saved to {path}")
 
     def load(self, path):
         """Load trained model from disk"""
         self.actor.load_state_dict(
-            torch.load(f"{path}/actor.pth"))
+            torch.load(
+                path + "actor.pth",
+                map_location = 'cpu'))
         self.critic.load_state_dict(
-            torch.load(f"{path}/critic.pth"))
+            torch.load(
+                path + "critic.pth",
+                map_location = 'cpu'))
         print(f"Model loaded from {path}")
 
 

@@ -46,7 +46,7 @@ from train_transformer_ppo import (
 
 
 # ─────────────────────────────────────────
-# LOAD WORKLOAD
+# LOAD WORKLOADS
 # Same as evaluate_tascar.py!
 # ─────────────────────────────────────────
 
@@ -144,8 +144,8 @@ def run_casr(calls):
     V1: CASR with PPO agent!
     Single state snapshot!
     No Transformer!
+    Original 200 episode model!
     """
-    import os
     model_path = MODEL_SAVE_PATH + "best/"
     if not os.path.exists(
             model_path + "actor.pth"):
@@ -211,6 +211,7 @@ def run_sac_only(calls):
     V2: SAC agent only!
     No Transformer!
     Raw 21-dim state!
+    500 episodes!
     """
     model_path = (
         SAC_ONLY_MODEL_PATH + "best/")
@@ -270,6 +271,7 @@ def run_transformer_ppo(calls):
     V3: Transformer + PPO!
     Has Transformer sequence input!
     But PPO not SAC!
+    500 episodes!
     """
     model_path = (
         TRANSFORMER_PPO_MODEL_PATH +
@@ -341,6 +343,7 @@ def run_full_tascar(calls):
     V4: Full TASCAR!
     Transformer + SAC + Dynamic theta!
     All components!
+    500 episodes!
     """
     model_path = (
         TASCAR_MODEL_PATH + "best/")
@@ -429,7 +432,7 @@ def print_ablation_table(results):
     print(
         "V3: Transformer+PPO (PPO + Transformer)")
     print(
-        "V4: Full TASCAR (SAC + Transformer + Dynamic θ)")
+        "V4: Full TASCAR (SAC + Transformer + Dynamic theta)")
     print("=" * 75)
 
     for wl in workloads:
@@ -527,6 +530,29 @@ def print_ablation_table(results):
                 f"  Synergy effect:     "
                 f"{syner:.3f}pp")
 
+        # AGI for each variant vs CASR
+        print(
+            f"\n  AGI vs CASR baseline:")
+        for v in [
+                'V2_SAC_Only',
+                'V3_Transformer_PPO',
+                'V4_Full_TASCAR']:
+            if (v in results and
+                    wl in results[v]):
+                v_csr = results[v][wl][
+                    'cold_start_rate']
+                agi = (
+                    (base - v_csr) /
+                    base * 100
+                    if base > 0 else 0)
+                symbol = (
+                    "✅" if agi > 0
+                    else "❌")
+                print(
+                    f"    {v:<30}: "
+                    f"AGI={agi:.2f}% "
+                    f"{symbol}")
+
 
 # ─────────────────────────────────────────
 # PLOT ABLATION GRAPHS
@@ -610,7 +636,8 @@ def plot_ablation(results):
                     rotation=45)
 
     ax1.set_title(
-        'Cold Start Rate (%)\nLower is Better',
+        'Cold Start Rate (%)\n'
+        'Lower is Better',
         fontweight='bold',
         fontsize=11)
     ax1.set_xticks(x)
@@ -634,7 +661,8 @@ def plot_ablation(results):
             if (v in results and
                     wl in results[v]):
                 values.append(
-                    results[v][wl]['tpi'])
+                    results[v][wl][
+                        'tpi'])
             else:
                 values.append(0)
         offset = (i - 1.5) * w
@@ -660,7 +688,8 @@ def plot_ablation(results):
                     rotation=45)
 
     ax2.set_title(
-        'TPI Score\nHigher is Better',
+        'TPI Score\n'
+        'Higher is Better',
         fontweight='bold',
         fontsize=11)
     ax2.set_xticks(x)
@@ -707,7 +736,9 @@ def run_ablation_study():
     }
 
     print("\nStarting Ablation Study!")
-    print(f"SLA Threshold: {SLA_THRESHOLD}s")
+    print(
+        f"SLA Threshold: "
+        f"{SLA_THRESHOLD}s")
     print("=" * 60)
 
     for v_name, v_func in (
@@ -773,16 +804,31 @@ if __name__ == "__main__":
     print("=" * 60)
     print("TASCAR Ablation Study")
     print("=" * 60)
-    print("V1: CASR (PPO, no Transformer)")
-    print("V2: SAC-Only (no Transformer)")
-    print("V3: Transformer+PPO (no SAC)")
-    print("V4: Full TASCAR (all)")
+    print(
+        "V1: CASR "
+        "(PPO, no Transformer)")
+    print(
+        "V2: SAC-Only "
+        "(no Transformer)")
+    print(
+        "V3: Transformer+PPO "
+        "(no SAC)")
+    print(
+        "V4: Full TASCAR "
+        "(all components)")
     print("=" * 60)
-    print("\nMake sure all models")
-    print("are trained first!")
-    print("V1: trained_model/best/")
-    print("V2: python train_sac_only.py")
-    print("V3: python train_transformer_ppo.py")
-    print("V4: trained_model_tascar/best/")
+    print(
+        "\nMake sure all models "
+        "are trained first!")
+    print(
+        "V1: trained_model/best/")
+    print(
+        "V2: python train_sac_only.py")
+    print(
+        "V3: python "
+        "train_transformer_ppo.py")
+    print(
+        "V4: trained_model_tascar/"
+        "best/")
     print("=" * 60)
     run_ablation_study()

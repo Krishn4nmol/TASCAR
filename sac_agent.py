@@ -622,19 +622,19 @@ class SACAgent:
         self.actor.load_state_dict(
             torch.load(
                 path + "actor.pth",
-                weights_only=True))
+                map_location = 'cpu'))
         self.critic1.load_state_dict(
             torch.load(
                 path + "critic1.pth",
-                weights_only=True))
+                map_location = 'cpu'))
         self.critic2.load_state_dict(
             torch.load(
                 path + "critic2.pth",
-                weights_only=True))
+                map_location = 'cpu'))
         self.transformer\
             .load_state_dict(
             torch.load(
                 path +
                 "transformer.pth",
-                weights_only=True))
+                map_location = 'cpu'))
         print(f"Loaded from {path}")
