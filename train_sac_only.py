@@ -737,7 +737,7 @@ def train_sac_only():
             if total_calls > 0 else 0)
 
         avg_ep_reward = (
-           ep_reward / steps_done
+            ep_reward / steps_done
             if steps_done > 0
             else ep_reward)
 
