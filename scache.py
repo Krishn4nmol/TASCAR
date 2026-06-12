@@ -141,15 +141,17 @@ class CountMinSketch:
     From paper Section 4.1 reference [34]
     """
 
-    def __init__(self, width=1000, depth=4):
+    def __init__(self, width=1000, depth=4, seed=None):
         # Width = number of counters per row
         self.width = width
         # Depth = number of hash functions
         self.depth = depth
         # The counter table
         self.table = np.zeros((depth, width), dtype=np.int32)
-        # Random seeds for hash functions
-        self.seeds = np.random.randint(1, 1000, depth)
+        # Random seeds for hash functions (seeded for reproducibility!)
+        rng = np.random.RandomState(
+            seed if seed is not None else RANDOM_SEED)
+        self.seeds = rng.randint(1, 1000, depth)
         # Total items added (for decay mechanism)
         self.total_added = 0
         # Decay threshold - reset counts periodically
@@ -202,11 +204,14 @@ class BloomFilter:
     candidates from window cache.
     """
 
-    def __init__(self, size=10000, num_hashes=3):
+    def __init__(self, size=10000, num_hashes=3, seed=None):
         self.size       = size
         self.num_hashes = num_hashes
         self.bits       = np.zeros(size, dtype=bool)
-        self.seeds      = np.random.randint(1, 1000, num_hashes)
+        # Seeded for reproducibility!
+        rng = np.random.RandomState(
+            seed if seed is not None else RANDOM_SEED)
+        self.seeds      = rng.randint(1, 1000, num_hashes)
 
     def _hashes(self, key):
         """Generate multiple hash positions for key"""
@@ -251,10 +256,15 @@ class WTinyLFUQueue:
     From paper Section 4.1 and Figure 5.
     """
 
-    def __init__(self, capacity, window_ratio=WINDOW_CACHE_RATIO):
+    def __init__(self, capacity, queue_index=0,
+                 window_ratio=WINDOW_CACHE_RATIO):
 
         # Total capacity of this queue
         self.capacity = max(1, capacity)
+
+        # Queue index used to derive a distinct
+        # but reproducible hash seed per queue!
+        self.queue_index = queue_index
 
         # Window cache size (20% of total)
         self.window_size = max(1,
@@ -272,10 +282,14 @@ class WTinyLFUQueue:
         self.main_cache = OrderedDict()
 
         # Frequency tracker for eviction decisions
-        self.count_min_sketch = CountMinSketch()
+        # Seeded per-queue for reproducibility!
+        self.count_min_sketch = CountMinSketch(
+            seed=RANDOM_SEED + queue_index)
 
         # Bloom filter for pre-filtering
-        self.bloom_filter = BloomFilter()
+        # Seeded per-queue for reproducibility!
+        self.bloom_filter = BloomFilter(
+            seed=RANDOM_SEED + queue_index)
 
         # Containers flagged for eviction but still running
         self.eviction_candidates = []
@@ -516,7 +530,8 @@ class SCache:
         self.queues = []
         for k in range(num_queues):
             capacity = initial_capacities[k]
-            queue    = WTinyLFUQueue(capacity)
+            queue    = WTinyLFUQueue(
+                capacity, queue_index=k)
             self.queues.append(queue)
 
         # Track all containers for WMT calculation
