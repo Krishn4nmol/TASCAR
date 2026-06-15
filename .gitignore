@@ -12,13 +12,7 @@ casr_env/
 data/
 
 # Trained models
-trained_model/
-trained_model_tascar/
-trained_model_sac_only/
-trained_model_transformer_ppo/
-trained_model_casr_500/
-trained_model_tascar_seed123/
-trained_model_tascar_seed456/
+trained_model*/
 
 # Environment files
 .env
@@ -28,3 +22,11 @@ trained_model_tascar_seed456/
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Misc
+*.log
+*.tmp
