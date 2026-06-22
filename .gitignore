@@ -17,7 +17,7 @@ trained_model*/
 # Environment files
 .env
 
-# VS Code s
+# VS Code set
 .vscode/
 
 # Jupyter checkpoints
