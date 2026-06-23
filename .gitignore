@@ -20,7 +20,7 @@ trained_model*/
 # VS Code settings
 .vscode/
 
-# Jupyter checkpoints
+# Jupyter checkpoint
 .ipynb_checkpoints/
 
 # Windows
