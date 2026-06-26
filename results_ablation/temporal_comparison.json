@@ -1,0 +1,22 @@
+{
+  "V1_CASR": {
+    "Common": 89.84,
+    "Significant": 92.024,
+    "Random": 86.051
+  },
+  "V5_LSTM_SAC": {
+    "Common": 78.331,
+    "Significant": 78.412,
+    "Random": 71.968
+  },
+  "V6_GRU_SAC": {
+    "Common": 91.96,
+    "Significant": 93.522,
+    "Random": 82.213
+  },
+  "V4_TASCAR": {
+    "Common": 72.111,
+    "Significant": 74.973,
+    "Random": 72.377
+  }
+}

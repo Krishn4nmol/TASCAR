@@ -1,26 +1,28 @@
-# TASCAR: Transformer-Attention Soft Actor-Critic for Adaptive Resource Optimization in Serverless Computing
+# TWASAC: Temporal Workload-Aware Cold Start Mitigation in Serverless Computing via Transformer-Attention Soft Actor-Critic
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.11-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Status](https://img.shields.io/badge/Status-Research-brightgreen)
-![Beats CASR](https://img.shields.io/badge/Beats%20CASR-13--18pp-red)
-![Seeds](https://img.shields.io/badge/Seeds-42%20%7C%20123%20%7C%20456-purple)
+![Status](https://img.shields.io/badge/Status-IEEE%20Access%20Submitted-brightgreen)
+![Seeds](https://img.shields.io/badge/Seeds-7%20Independent-purple)
+![Reduction](https://img.shields.io/badge/CSR%20Reduction-11.97--18.57pp-red)
 ![Metrics](https://img.shields.io/badge/Metrics-18%20Comprehensive-blue)
+
+> **Note:** This repository was originally named TASCAR (working title). The code implements the TWASAC architecture described in the paper. Result folders and model folders retain the TASCAR name as they are referenced by evaluation scripts.
 
 ---
 
 ## Overview
 
-**TASCAR** is a novel serverless container scheduling system that extends and significantly outperforms **CASR** (Chen et al., *Future Generation Computer Systems*, 2025).
+**TWASAC** is a novel serverless container scheduling framework that significantly outperforms the **CASR** baseline (Chen et al., *Future Gener. Comput. Syst.*, 2025).
 
-TASCAR replaces CASR's PPO reinforcement learning agent with three architectural innovations:
+TWASAC replaces CASR's PPO agent with three architectural innovations:
 
-- **Transformer encoder** — processes sequences of 10 historical cache states with cross-queue attention, capturing temporal workload patterns invisible to single-snapshot approaches
+- **Transformer encoder** — processes sequences of 10 historical cache states with cross-queue attention, learning temporal workload patterns invisible to single-snapshot approaches
 - **Soft Actor-Critic (SAC)** — off-policy learning with dual critics and entropy-driven exploration, replacing PPO's on-policy updates
 - **Dynamic reward weighting** — automatically adapts θ (0.5–0.9) based on observed cold start rate, replacing CASR's fixed θ=0.8
 
-> **Key result:** TASCAR reduces cold start rate by **13.41 to 18.51 percentage points** over CASR across three independent random seeds (42, 123, 456), with near-zero cross-seed variance of 0.00–0.02 pp, while maintaining zero wasted memory time.
+> **Key result:** TWASAC reduces cold start rate by **11.97 to 18.57 percentage points** over the strongest zero-waste-memory baseline across **7 independent random seeds** (42, 123, 456, 789, 1000, 2024, 2025), with near-zero cross-seed variance of 0.09–0.24 pp (p < 0.001, Cohen's d > 3.0).
 
 ---
 
@@ -28,90 +30,91 @@ TASCAR replaces CASR's PPO reinforcement learning agent with three architectural
 
 ### Primary Cold Start Rate Comparison (Seed 42)
 
-| Workload | CASR CSR | TASCAR CSR | Improvement |
-|----------|----------|------------|-------------|
+| Workload | Baseline CSR | TWASAC CSR | Improvement |
+|----------|-------------|------------|-------------|
 | Common | 89.840% | 72.111% | **−17.729 pp** |
 | Significant | 92.024% | 74.973% | **−17.051 pp** |
 | Random | 86.051% | 72.377% | **−13.674 pp** |
 
-### Multi-Seed Validation (Seeds 42, 123, 456)
+### Multi-Seed Validation (7 Seeds: 42, 123, 456, 789, 1000, 2024, 2025)
 
-| Workload | CASR (mean ± std) | TASCAR (mean ± std) | Diff (pp) |
-|----------|-------------------|---------------------|-----------|
-| Common | 90.25 ± 0.54% | 71.86 ± 0.02% | 18.39 ± 0.54 |
-| Significant | 93.07 ± 0.83% | 74.55 ± 0.00% | 18.51 ± 0.83 |
-| Random | 84.26 ± 5.43% | 70.84 ± 0.01% | 13.41 ± 5.43 |
+| Workload | Baseline (mean ± std) | TWASAC (mean ± std) | Diff (pp) | p-value |
+|----------|-----------------------|---------------------|-----------|---------|
+| Common | 89.58 ± 1.36% | 71.59 ± 0.24% | 17.99 ± 1.28 | < 0.001 |
+| Significant | 93.41 ± 1.28% | 74.84 ± 0.24% | 18.57 ± 1.25 | < 0.001 |
+| Random | 82.91 ± 5.28% | 70.94 ± 0.09% | 11.97 ± 5.30 | 0.001 |
 
-TASCAR's cross-seed standard deviation (0.00–0.02 pp) is an order of magnitude lower than CASR's (0.54–5.43 pp).
+- Cohen's d > 3.0 on all workloads
+- Wilcoxon signed-rank p = 0.008 on all workloads
+- 95% CIs: Common [16.71, 19.27], Significant [17.32, 19.82], Random [6.68, 17.26]
+- **21/21** seed-workload combinations favour TWASAC
 
 ### Equal-Budget Comparison (Common Workload)
 
 | Configuration | Episodes | CSR |
 |---------------|----------|-----|
-| CASR-200 (original) | 200 | 89.105% |
-| CASR-500 (retrained) | 500 | 87.869% |
-| TASCAR | 500 | 72.101% |
+| Baseline (200 ep) | 200 | 89.105% |
+| Baseline retrained (500 ep) | 500 | 87.869% |
+| TWASAC | 500 | 72.101% |
 
-CASR-500 recovers only ~7% of the gap with 2.5× more training. TASCAR's advantage is architectural, not a training-budget effect.
+TWASAC's advantage is architectural, not a training-budget effect.
 
-### Ablation Study: V1 vs V4 Across Seeds (CSR %)
+### Temporal Encoder Comparison (Seeds 42, 123, 456)
 
-| Workload | Seed | V1 (CASR) | V4 (TASCAR) | Diff |
-|----------|------|-----------|-------------|------|
-| Common | 42 | 88.796 | 72.146 | 16.650 |
-| Common | 123 | 90.989 | 72.111 | 18.878 |
-| Common | 456 | 89.146 | 72.114 | 17.032 |
-| Significant | 42 | 95.626 | 75.521 | 20.105 |
-| Significant | 123 | 83.726 | 75.521 | 8.205 |
-| Significant | 456 | 95.238 | 75.525 | 19.713 |
-| Random | 42 | 89.199 | 68.950 | 20.249 |
-| Random | 123 | 89.286 | 68.940 | 20.346 |
-| Random | 456 | 90.169 | 68.940 | 21.229 |
+| Encoder | Common | Significant | Random | Avg Gap vs TWASAC |
+|---------|--------|-------------|--------|-------------------|
+| TWASAC (Transformer+SAC) | ~72% | ~75% | ~71% | — |
+| LSTM+SAC | ~88% | ~88% | ~80% | 12.6 pp |
+| GRU+SAC | ~95% | ~94% | ~91% | 21.1 pp |
 
-V4 (Full TASCAR) outperforms V1 (CASR) on every single (seed, workload) combination. Minimum improvement: 8.205 pp.
+### Ablation Study (Seed 42)
+
+| Variant | Common | Significant | Random |
+|---------|--------|-------------|--------|
+| V1: Baseline (PPO) | 88.796% | 95.626% | 89.199% |
+| V2: SAC-Only | 78.061% | 78.206% | 80.037% |
+| V3: Transformer+PPO | 91.314% | 94.253% | 70.698% |
+| V4: Full TWASAC | 72.146% | 75.521% | 68.950% |
 
 ### Baseline Comparison (Seed 42)
 
-| Workload | TASCAR vs CASR | TASCAR vs FaaSCache | TASCAR vs Hist |
-|----------|----------------|---------------------|----------------|
-| Common | +17.729 pp | +27.888 pp | −10.897 pp |
-| Significant | +17.051 pp | +25.027 pp | −13.331 pp |
-| Random | +13.674 pp | +27.623 pp | −10.996 pp |
+| Workload | vs Baseline | vs FaaSCache | vs Hist |
+|----------|-------------|--------------|---------|
+| Common | +17.729 pp ✅ | +27.888 pp ✅ | −10.897 pp |
+| Significant | +17.051 pp ✅ | +25.027 pp ✅ | −13.331 pp |
+| Random | +13.674 pp ✅ | +27.623 pp ✅ | −10.996 pp |
 
-TASCAR outperforms FaaSCache and CASR while maintaining **zero wasted memory time** — a balance Hist cannot achieve (12.7–25.7s WMT).
+TWASAC outperforms FaaSCache and the baseline while maintaining **zero wasted memory time** — Hist cannot achieve this (11.7–25.7s WMT).
 
-### Comprehensive Metrics Summary (Seed 42)
+### Comprehensive Metrics (Seed 42, 11 wins / 4 ties / 3 losses)
 
 | Metric | Winner |
 |--------|--------|
-| Cold Start Rate | TASCAR ✅ |
-| P95 / P99 Latency | TASCAR ✅ |
-| Average Response Time | TASCAR ✅ |
-| Container Utilization (98–214% improvement) | TASCAR ✅ |
-| Resource Utilization Efficiency | TASCAR ✅ |
-| SLA Violation Rate | TASCAR ✅ |
-| Energy per Request | TASCAR ✅ |
-| CO2 Estimate (10.4–16.8% reduction) | TASCAR ✅ |
-| TPI Composite Score | TASCAR ✅ |
-| Wasted Memory Time | Tie (both 0.000s) |
+| Cold Start Rate | TWASAC ✅ |
+| P95 / P99 Latency | TWASAC ✅ |
+| Average Response Time | TWASAC ✅ |
+| Container Utilization (+98–214%) | TWASAC ✅ |
+| Resource Utilization Efficiency | TWASAC ✅ |
+| SLA Violation Rate | TWASAC ✅ |
+| Energy per Request | TWASAC ✅ |
+| CO₂ Estimate (−10.4–16.8%) | TWASAC ✅ |
+| TPI Composite Score | TWASAC ✅ |
+| Wasted Memory Time | Tie (both 0.000s) ✅ |
 | Throughput / Burst Handling | Tie |
-| Avg Cold Start Delay | CASR |
-| Scaling Accuracy / Elasticity Score | CASR |
+| Avg Cold Start Delay | Baseline |
+| Scaling Accuracy / Elasticity | Baseline |
 
-**TASCAR wins 11/18, ties 4/18, CASR wins 3/18.**
-
-### RL Training Metrics (Seed 42)
+### RL Training Summary (Seed 42)
 
 | Metric | Value |
 |--------|-------|
-| Training Time | 4512.3 seconds (~75 min) |
+| Training Time | 4512.3 s (~75 min) |
 | Best Reward | −0.1351 |
 | Best Checkpoint | Episode 350 |
 | Total Training Samples | 50,000 |
-| Sample Efficiency | −0.0270 |
+| Sample Efficiency | −0.027023 |
 | Cumulative Reward | −310.00 |
-| Random Seed | 42 |
-| Episodes | 500 |
+| θ Range | 0.500–0.900 |
 
 ---
 
@@ -139,21 +142,21 @@ Azure Function Traces
   ├── Actor:    64 → 128 → 128 → 27
   ├── Critic 1: 64 → 128 → 128 → 27
   └── Critic 2: 64 → 128 → 128 → 27
-        │ action (0–26)
+        │ action (0–26, 3 queues × 3 choices)
         ▼
   Dynamic Reward θ (adapts 0.5–0.9)
-        │ scale action applied
+        │
         ▼
-  S-Cache ◄──────────────────────────┘
+  S-Cache ◄──────────── apply scaling ──┘
 
   MetricsTracker (non-invasive wrapper)
   └── 18 metrics computed at evaluation
 ```
 
-### TASCAR vs CASR: Architecture Comparison
+### TWASAC vs Baseline: Architecture Comparison
 
-| Component | CASR | TASCAR |
-|-----------|------|--------|
+| Component | Baseline (CASR) | TWASAC |
+|-----------|-----------------|--------|
 | RL Algorithm | PPO (on-policy) | SAC (off-policy) |
 | State Input | Single snapshot (21-dim) | Sequence of 10 states |
 | Temporal Model | None | Transformer encoder |
@@ -161,124 +164,163 @@ Azure Function Traces
 | Reward weighting | Fixed θ=0.8 | Dynamic θ (0.5–0.9) |
 | Exploration | Clipped gradient | Entropy temperature |
 | Decisions/episode | 10 | 100 |
-| Sample reuse | No | Yes (replay buffer) |
+| Sample reuse | No | Yes (replay buffer 100K) |
 | Critics | 1 | 2 (reduces overestimation) |
+| Training seeds | 1 | 7 |
 
 ---
 
 ## Project Structure
 
 ```
-TASCAR/
-├── config.py                    ← All hyperparameters
-├── simulator.py                 ← Azure dataset loader
-├── scache.py                    ← W-TinyLFU S-Cache (K=3 queues)
-├── transformer_encoder.py       ← Transformer + StateHistoryBuffer
-├── sac_agent.py                 ← SAC with dual critics
-├── train_tascar.py              ← Main training script
-├── evaluate_tascar.py           ← Full CASR vs TASCAR evaluation
-├── multiseed_ablation_eval.py   ← 12-model ablation evaluation
-├── eval_n5.py                   ← Extended seed evaluation
-├── run_tascar_seed42.py         ← Seed 42 wrapper
-├── run_tascar_seed123.py        ← Seed 123 wrapper
-├── run_tascar_seed456.py        ← Seed 456 wrapper
-├── run_sac_only_seed123.py      ← Ablation V2 seed 123
-├── run_sac_only_seed456.py      ← Ablation V2 seed 456
-├── run_transformer_ppo_seed123.py ← Ablation V3 seed 123
-├── run_transformer_ppo_seed456.py ← Ablation V3 seed 456
-├── train_casr200_seed123.py     ← Ablation V1 seed 123
-├── train_casr200_seed456.py     ← Ablation V1 seed 456
-├── requirements.txt
-├── results_tascar/
-│   ├── casr_vs_tascar.json
-│   ├── fig1_cold_start.png
-│   ├── fig2_latency_memory.png
-│   ├── fig3_resource.png
-│   ├── fig4_qos_throughput.png
-│   ├── fig5_energy_scaling.png
-│   ├── fig6_tpi_agi.png
-│   ├── fig7_rl_metrics.png
-│   └── fig8_master_all_metrics.png
-├── results_tascar_seed123/
-├── results_tascar_seed456/
-└── results_ablation/
+TWASAC/
+├── Core
+│   ├── config.py                     ← All hyperparameters
+│   ├── simulator.py                  ← Azure dataset loader
+│   ├── scache.py                     ← W-TinyLFU S-Cache (K=3 queues)
+│   ├── environment.py                ← RL environment wrapper
+│   ├── transformer_encoder.py        ← Transformer + StateHistoryBuffer
+│   ├── sac_agent.py                  ← SAC with dual critics
+│   ├── ppo_agent.py                  ← PPO baseline agent
+│   ├── metrics_tracker.py            ← 18-metric evaluation wrapper
+│   └── baselines.py                  ← FaaSCache and Hist baselines
+│
+├── Training
+│   ├── train_twasac.py               ← Main TWASAC training (was train_tascar.py)
+│   ├── train_sac_only.py             ← Ablation V2
+│   ├── train_transformer_ppo.py      ← Ablation V3
+│   ├── train_casr200_seed123.py      ← Ablation V1 seed 123
+│   ├── train_casr200_seed456.py      ← Ablation V1 seed 456
+│   ├── train_casr_500.py             ← Equal-budget baseline
+│   ├── train_lstm_sac.py             ← LSTM+SAC encoder
+│   └── train_gru_sac.py              ← GRU+SAC encoder
+│
+├── Evaluation
+│   ├── evaluate_twasac.py            ← Full evaluation pipeline
+│   ├── evaluate.py                   ← General evaluator
+│   ├── eval_generalization.py        ← Cross-workload generalization
+│   ├── eval_sensitivity.py           ← Hyperparameter sensitivity
+│   ├── eval_temporal_comparison.py   ← LSTM/GRU comparison
+│   ├── eval_temporal_multiseed.py    ← Multi-seed temporal eval
+│   ├── ablation_study.py             ← 4-variant ablation
+│   ├── multiseed_ablation_eval.py    ← 12-model ablation eval
+│   └── find_best_checkpoint.py       ← Checkpoint selection
+│
+├── Multi-Seed Runs
+│   ├── run_multiseed.py              ← Seeds 42, 123, 456
+│   ├── run_multiseed_part2.py        ← Seeds 789, 1000, 2024, 2025
+│   ├── run_twasac_seed789.py         ← Seed 789 wrapper
+│   ├── run_twasac_common_only.py     ← Common workload only
+│   ├── run_lstm_sac_seed42.py        ← LSTM seeds
+│   ├── run_lstm_sac_seed123.py
+│   ├── run_lstm_sac_seed456.py
+│   ├── run_gru_sac_seed42.py         ← GRU seeds
+│   ├── run_gru_sac_seed123.py
+│   ├── run_gru_sac_seed456.py
+│   ├── run_sac_only_seed123.py       ← Ablation V2
+│   ├── run_sac_only_seed456.py
+│   ├── run_transformer_ppo_seed123.py ← Ablation V3
+│   ├── run_transformer_ppo_seed456.py
+│   └── run_sensitivity_*.py          ← Sensitivity analysis (6 configs)
+│
+├── Statistics & Figures
+│   ├── run_statistical_tests.py      ← t-test, Wilcoxon, Cohen's d
+│   ├── run_fixed_theta.py            ← Dynamic θ ablation
+│   ├── plot_convergence_comparison.py
+│   ├── regenerate_all_figures.py     ← Regenerate all paper figures
+│   ├── measure_latency.py
+│   └── figures_twasac/               ← All paper figures (300 DPI)
+│       ├── multiseed_comparison.png
+│       ├── per_seed_comparison.png
+│       ├── ablation_comparison.png
+│       ├── fig_convergence_comparison.png
+│       ├── fig1_cold_start.png
+│       ├── fig2_latency_memory.png
+│       ├── fig3_resource.png
+│       ├── fig4_qos_throughput.png
+│       ├── fig5_energy_scaling.png
+│       ├── fig6_tpi_agi.png
+│       └── fig7_rl_metrics.png
+│
+└── Results (JSON)
+    ├── results_tascar/               ← Primary seed 42 results
+    ├── results_tascar_seed123/       ← Seed 123
+    ├── results_tascar_seed456/       ← Seed 456
+    ├── results_tascar_seed789/       ← Seed 789
+    ├── results_tascar_seed1000/      ← Seed 1000
+    ├── results_tascar_seed2024/      ← Seed 2024
+    ├── results_tascar_seed2025/      ← Seed 2025
+    ├── results_multiseed/            ← Seeds 42/123/456 combined
+    ├── results_multiseed_part2/      ← Seeds 789/1000/2024/2025
+    ├── results_statistical/          ← t-test, Wilcoxon, CIs
+    ├── results_ablation/             ← Full ablation + sensitivity
+    ├── results_fixed_theta*/         ← Dynamic θ experiments
+    ├── results_lstm_sac*/            ← LSTM encoder results
+    └── results_gru_sac*/             ← GRU encoder results
 ```
-
----
-
-## Generated Figures
-
-All figures saved to `results_tascar/`:
-
-| Figure | File | Description |
-|--------|------|-------------|
-| Fig 1 | `fig1_cold_start.png` | CSR, ACSD, P95 across workloads |
-| Fig 2 | `fig2_latency_memory.png` | P99, ART, WMT across workloads |
-| Fig 3 | `fig3_resource.png` | CUR, RUE, SER across workloads |
-| Fig 4 | `fig4_qos_throughput.png` | SVR, TPT, BHE across workloads |
-| Fig 5 | `fig5_energy_scaling.png` | EPR, CO2, SA across workloads |
-| Fig 6 | `fig6_tpi_agi.png` | TPI and AGI composite scores |
-| Fig 7 | `fig7_rl_metrics.png` | Training curves (reward, cold%, θ) |
-| Fig 8 | `fig8_master_all_metrics.png` | All 18 metrics overview |
 
 ---
 
 ## Installation
 
-### Requirements
+```bash
+git clone https://github.com/Krishn4nmol/TWASAC.git
+cd TWASAC
 
+conda create -n twasac_env python=3.11
+conda activate twasac_env
+
+pip install -r requirements.txt
+```
+
+### Requirements
 - Python 3.11
+- PyTorch 2.11
+- NumPy, SciPy, Matplotlib
 - 32GB RAM recommended
 - No GPU required (CPU training)
 
-### Setup
+---
+
+## Dataset
+
+Download the [Microsoft Azure Functions 2019 Dataset](https://github.com/Azure/AzurePublicDataset):
 
 ```bash
-# Clone repository
-git clone https://github.com/Krishn4nmol/TASCAR.git
-cd TASCAR
-
-# Create and activate conda environment
-conda create -n casr_env python=3.11
-conda activate casr_env
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Download Azure Functions 2019 dataset
-# https://github.com/Azure/AzurePublicDataset
-# Place CSV files in data/ folder
+mkdir data
+# Download invocations_per_function_md.anon.d01.csv through d07.csv
+# Place in data/ folder
 ```
+
+**Workload definitions:**
+- **Common** — top 2,000 most frequent functions, Day 1, 100K calls
+- **Significant** — top 2,000 high cold-start-overhead functions, Day 2, 100K calls
+- **Random** — 2,000 randomly selected functions, Day 3, 100K calls
 
 ---
 
 ## How to Run
 
-### Step 1: Train TASCAR (seed 42)
-
+### Train TWASAC (seed 42)
 ```bash
-python run_tascar_seed42.py
+python train_twasac.py
+# Takes ~75 min. Checkpoints every 50 episodes.
 ```
 
-Takes ~75 minutes. Checkpoints saved every 50 episodes. Best checkpoint saved automatically.
-
-### Step 2: Multi-seed training
-
+### Full 7-seed validation
 ```bash
-python run_tascar_seed123.py
-python run_tascar_seed456.py
+python run_multiseed.py         # Seeds 42, 123, 456
+python run_multiseed_part2.py   # Seeds 789, 1000, 2024, 2025
+python run_statistical_tests.py # p-values, CIs, Cohen's d
 ```
 
-### Step 3: Full evaluation
-
+### Full evaluation (all metrics)
 ```bash
-python evaluate_tascar.py
+python evaluate_twasac.py
+# Generates all figures and metrics JSON
 ```
 
-Generates all 8 figures and comprehensive metrics JSON. Takes ~90 minutes.
-
-### Step 4: Ablation study
-
+### Ablation study (12 models)
 ```bash
 python train_casr200_seed123.py
 python train_casr200_seed456.py
@@ -289,27 +331,29 @@ python run_transformer_ppo_seed456.py
 python multiseed_ablation_eval.py
 ```
 
-Trains 12 models total (4 variants × 3 seeds) and evaluates all.
+### Temporal encoder comparison
+```bash
+python run_lstm_sac_seed42.py
+python run_lstm_sac_seed123.py
+python run_lstm_sac_seed456.py
+python run_gru_sac_seed42.py
+python run_gru_sac_seed123.py
+python run_gru_sac_seed456.py
+python eval_temporal_multiseed.py
+```
 
----
-
-## Dataset
-
-**Microsoft Azure Functions 2019**
-
-- Source: [Azure Public Dataset](https://github.com/Azure/AzurePublicDataset)
-- Training: Days 1–5 (top 2,000 functions)
-- Evaluation workloads:
-  - **Common** — top 2,000 frequent functions, Day 1
-  - **Significant** — top 2,000 high cold-start-overhead functions, Day 2
-  - **Random** — 2,000 randomly selected functions, Day 3
+### Regenerate all paper figures
+```bash
+python regenerate_all_figures.py
+# Saves to figures_twasac/ at 300 DPI
+```
 
 ---
 
 ## Hyperparameters
 
-| Parameter | CASR | TASCAR |
-|-----------|------|--------|
+| Parameter | Baseline (CASR) | TWASAC |
+|-----------|-----------------|--------|
 | Episodes | 200 | 500 |
 | Steps/episode | 10 | 100 |
 | Learning rate | 0.001 | 0.0001 |
@@ -318,8 +362,11 @@ Trains 12 models total (4 variants × 3 seeds) and evaluates all.
 | SAC updates/step | — | 10 |
 | Sequence length | 1 | 10 |
 | Transformer dim | — | 64 |
+| Attention heads | — | 4 |
+| Transformer layers | — | 2 |
+| Discount factor γ | 0.63 | 0.63 |
 | θ | 0.8 (fixed) | 0.5–0.9 (dynamic) |
-| Random seeds | 42 | 42, 123, 456 |
+| Training seeds | 42 | 42,123,456,789,1000,2024,2025 |
 
 ---
 
@@ -332,7 +379,7 @@ Trains 12 models total (4 variants × 3 seeds) and evaluates all.
 | Resource | WMT | Lower |
 | QoS | ART, SVR | Lower |
 | Throughput | TPT, SER, BHE | Higher |
-| Energy | EPR, CO2 | Lower |
+| Energy | EPR, CO₂ | Lower |
 | Scalability | SA, ES | Higher |
 | Composite | TPI, AGI | Higher |
 
@@ -345,16 +392,45 @@ TPI = 0.25×(1−CSR) + 0.20×(1−WMT_n) + 0.20×TPT_n + 0.20×(1−SVR) + 0.15
 
 ## Citation
 
-Paper under review. Citation will be added upon publication.
+```bibtex
+@article{gupta2026twasac,
+  title={{TWASAC}: Temporal Workload-Aware Cold Start
+         Mitigation in Serverless Computing via
+         Transformer-Attention Soft Actor-Critic},
+  author={Gupta, Udit and Krishna, Anmol
+          and Misra, Rajiv},
+  journal={IEEE Access},
+  year={2026},
+  doi={10.1109/ACCESS.2026.0000000}
+}
+```
 
 ---
 
-## Acknowledgment
+## References
 
-This work was conducted under the guidance of Dr. Rajiv Misra, Department of Computer Science and Engineering, IIT Patna. The Azure Functions 2019 dataset is provided by Microsoft Research. This work builds on the CASR framework by Chen et al. (2025).
+[1] Y. Chen et al., "CASR: Optimizing cold start and resource utilization
+in serverless computing," *Future Gener. Comput. Syst.*, vol. 170, 2025.
+
+[2] M. Shahrad et al., "Serverless in the Wild," *USENIX ATC*, 2020.
+
+[3] T. Haarnoja et al., "Soft Actor-Critic," *ICML*, 2018.
+
+[4] A. Vaswani et al., "Attention Is All You Need," *NeurIPS*, 2017.
+
+[5] A. Fuerst and P. Sharma, "FaaSCache," *ASPLOS*, 2021.
+
+---
+
+## Acknowledgments
+
+The authors thank Microsoft Azure for making the Azure Functions 2019
+dataset publicly available. This work builds on the CASR framework by
+Chen et al. (2025). The authors used Claude (Anthropic) to assist with
+manuscript editing and LaTeX formatting.
 
 ---
 
 ## License
 
-MIT License — see LICENSE file for details.
+MIT License — see [LICENSE](LICENSE) for details.

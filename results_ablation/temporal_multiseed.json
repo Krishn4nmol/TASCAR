@@ -1,0 +1,70 @@
+{
+  "V1_CASR": {
+    "Common": 89.84,
+    "Significant": 92.024,
+    "Random": 86.051
+  },
+  "V5_LSTM_SAC": {
+    "per_seed": {
+      "42": {
+        "Common": 92.135,
+        "Significant": 92.248,
+        "Random": 86.165
+      },
+      "123": {
+        "Common": 92.135,
+        "Significant": 92.248,
+        "Random": 86.165
+      },
+      "456": {
+        "Common": 92.135,
+        "Significant": 92.248,
+        "Random": 86.187
+      }
+    },
+    "mean": {
+      "Common": 92.135,
+      "Significant": 92.248,
+      "Random": 86.172
+    },
+    "std": {
+      "Common": 0.0,
+      "Significant": 0.0,
+      "Random": 0.01
+    }
+  },
+  "V6_GRU_SAC": {
+    "per_seed": {
+      "42": {
+        "Common": 92.135,
+        "Significant": 92.248,
+        "Random": 86.165
+      },
+      "123": {
+        "Common": 98.274,
+        "Significant": 98.465,
+        "Random": 94.314
+      },
+      "456": {
+        "Common": 95.111,
+        "Significant": 95.249,
+        "Random": 95.604
+      }
+    },
+    "mean": {
+      "Common": 95.173,
+      "Significant": 95.321,
+      "Random": 92.028
+    },
+    "std": {
+      "Common": 2.507,
+      "Significant": 2.539,
+      "Random": 4.179
+    }
+  },
+  "V4_TASCAR": {
+    "Common": 72.111,
+    "Significant": 74.973,
+    "Random": 72.377
+  }
+}

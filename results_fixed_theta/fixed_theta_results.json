@@ -1,0 +1,44 @@
+{
+  "42": {
+    "Common": {
+      "CASR": 87.557,
+      "Fixed_Theta": 71.087
+    },
+    "Significant": {
+      "CASR": 91.456,
+      "Fixed_Theta": 74.095
+    },
+    "Random": {
+      "CASR": 78.09,
+      "Fixed_Theta": 70.999
+    }
+  },
+  "123": {
+    "Common": {
+      "CASR": 88.71,
+      "Fixed_Theta": 71.087
+    },
+    "Significant": {
+      "CASR": 95.042,
+      "Fixed_Theta": 74.095
+    },
+    "Random": {
+      "CASR": 80.193,
+      "Fixed_Theta": 70.999
+    }
+  },
+  "456": {
+    "Common": {
+      "CASR": 89.31099999999999,
+      "Fixed_Theta": 71.09
+    },
+    "Significant": {
+      "CASR": 85.315,
+      "Fixed_Theta": 74.08500000000001
+    },
+    "Random": {
+      "CASR": 73.941,
+      "Fixed_Theta": 71.003
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "standard_tascar": {
+    "Common": 77.513,
+    "Significant": 78.004,
+    "Random": 72.767
+  },
+  "common_only_tascar": {
+    "Common": 95.178,
+    "Significant": 95.607,
+    "Random": 93.652
+  }
+}
