@@ -426,9 +426,7 @@ in serverless computing," *Future Gener. Comput. Syst.*, vol. 170, 2025.
 
 The authors thank Microsoft Azure for making the Azure Functions 2019
 dataset publicly available. This work builds on the CASR framework by
-Chen et al. (2025). The authors used Claude (Anthropic) to assist with
-manuscript editing and LaTeX formatting.
-
+Chen et al. (2025).
 ---
 
 ## License
