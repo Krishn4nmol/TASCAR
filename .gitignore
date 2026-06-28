@@ -8,7 +8,7 @@ __pycache__/
 # Virtual environment
 casr_env/
 
-# Dataset files (too la for GitHub)
+# Dataset files (too larg for GitHub)
 data/
 
 # Trained models
